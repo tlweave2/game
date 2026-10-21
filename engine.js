@@ -1,6 +1,8 @@
 // Orientation Day player. No dependencies, no build step.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
+import * as music from './music.js';
+
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
 const faceCanvas = $('#face');
@@ -180,6 +182,7 @@ function onEnded(sc) {
   } else if (sc.type === 'death') {
     state.deaths++;
     if (sc.deathId) state.seen.add(sc.deathId);
+    music.sting();
     save();
     hud();
     showCard(sc);
@@ -235,6 +238,7 @@ function answer(action) {
 // ------------------------------------------------------------------ captions + voice
 function say(c) {
   const who = c.who || 'Cheryl';
+  music.duck(c.hold || 2600 + c.text.length * 38);
   if (state.opts.captions) {
     $('#who').textContent = who;
     $('#line').textContent = c.text;
@@ -345,6 +349,7 @@ function retryAfterCard() {
   const sc = state.cardFor;
   if (!sc) return;
   hideCard();
+  music.start();
   enter(sc.retry || data.retry);
 }
 
@@ -410,6 +415,8 @@ function begin() {
   state.opts.captions = $('#optCaptions').checked;
   state.opts.tts = $('#optTts').checked;
   state.opts.extra = $('#optExtra').checked;
+  music.setMuted(!$('#optMusic').checked);
+  music.start();
   $('#start').hidden = true;
   state.started = true;
   state.deaths = 0;
@@ -438,6 +445,7 @@ function wire() {
     if (e.code === 'Backquote') { $('#debug').hidden = !$('#debug').hidden; return; }
     if (!$('#gallery').hidden) { if (e.code === 'Escape') $('#gallery').hidden = true; return; }
     if (!$('#start').hidden) return;
+    if (e.code === 'KeyM') { music.setMuted(!music.isMuted()); return; }
     if (!$('#card').hidden && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); retryAfterCard(); return; }
     const a = KEYS[e.code];
     if (a && state.win && !state.win.done) { e.preventDefault(); answer(a); }
@@ -451,6 +459,7 @@ async function boot() {
   scenes = data.scenes;
   $('#title').textContent = data.title;
   $('#tagline').textContent = data.tagline;
+  $('#optMusic').checked = !music.isMuted();
   wire();
   buildDebug();
   sizeCanvas();
