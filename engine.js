@@ -226,6 +226,7 @@ function answer(action) {
   const w = state.win;
   if (!w || w.done) return;
   const sc = w.sc;
+  if (action !== 'timeout' && !sc.prompt.includes(action)) return;
   const target = action === 'timeout' ? sc.timeout : sc.inputs[action];
   if (!target) return;
   w.done = true;
