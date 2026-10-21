@@ -16,8 +16,8 @@
 
     "lobby_intro": {
       "type": "reflex",
-      "clip": "lobby_intro.mp4",
-      "decisionAt": 3.1,
+      "clip": "lobby_intro_walk.mp4",
+      "decisionAt": 6.1,
       "window": 1.5,
       "prompt": ["left", "jump", "stop"],
       "inputs": {
