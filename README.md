@@ -14,7 +14,7 @@ python3 -m http.server 8000
 
 Open http://localhost:8000/ and press Begin. Add `?debug=1` (or press the backtick key) for a scene jump list and a live timer readout.
 
-Controls: A / D or arrow keys for left and right, W or Space for jump, S for stop. On a phone, tap the buttons.
+Controls: A / D or arrow keys for left and right, W or Space for jump, S for stop, M to mute the theme music. On a phone, tap the buttons.
 
 In the Lobby the correct answer is to do nothing or press STOP. Jump and the lateral moves each file a different incident report.
 
