@@ -1,3 +1,5 @@
+<!doctype html>
+<html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Orientation Day</title>
@@ -45,7 +47,8 @@ button { font: inherit; color: inherit; }
 #face { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
 #hud { position: absolute; z-index: 4; top: 2cqw; left: 2cqw; padding: 0.6cqw 1.4cqw; background: rgba(27, 22, 19, 0.78); font: 500 clamp(9px, 1.7cqw, 15px)/1.2 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--beige); }
 #hud b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-#fs { position: absolute; z-index: 4; top: 2cqw; right: 2cqw; padding: 0.6cqw 1.4cqw; background: rgba(27, 22, 19, 0.78); border: 0; cursor: pointer; font: 500 clamp(9px, 1.7cqw, 15px)/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--beige); }
+#tools { position: absolute; z-index: 4; top: 2cqw; right: 2cqw; display: flex; gap: 1cqw; }
+#tools button { padding: 0.6cqw 1.4cqw; background: rgba(27, 22, 19, 0.78); border: 0; cursor: pointer; font: 500 clamp(9px, 1.7cqw, 15px)/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--beige); }
 #captions { position: absolute; z-index: 4; left: 50%; bottom: 4cqw; transform: translateX(-50%); width: min(86cqw, 900px); padding: 1.1cqw 2cqw; background: rgba(27, 22, 19, 0.86); opacity: 0; transition: opacity 0.18s; pointer-events: none; font-size: clamp(11px, 2.3cqw, 24px); line-height: 1.3; text-align: center; }
 #captions.show { opacity: 1; }
 #who { display: block; margin-bottom: 0.2em; font: 500 0.62em/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tan); }
@@ -98,6 +101,7 @@ dl { margin: 0; display: grid; gap: 8px; min-width: 0; }
 dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b5d4b; }
 dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .keyhint { font-size: 11px; color: #6b5d4b; }
+.paper .btn.ghost { color: #231b15; border-color: #231b15; }
 @media (max-width: 420px) { .paper .body { grid-template-columns: 1fr; } #badge { width: 84px; height: 105px; } }
 
 /* ---- end + gallery ---- */
@@ -121,7 +125,10 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
   <div id="stage">
     <canvas id="face" aria-hidden="true"></canvas>
     <div id="hud" aria-live="off">Incidents <b id="hudDeaths">0</b> &middot; File <b id="hudFile">0</b></div>
-    <button id="fs" type="button">Fullscreen</button>
+    <div id="tools">
+      <button id="fs" type="button">Fullscreen</button>
+      <button id="quit" type="button" title="Back to the title screen (Esc)">Exit</button>
+    </div>
     <div id="captions" role="status" aria-live="polite"><span id="who"></span><span id="line"></span></div>
   </div>
 
@@ -156,7 +163,7 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
         <button class="btn" id="startGo" type="button" disabled>Begin orientation</button>
         <button class="btn ghost" id="openGallery" type="button">Incident reports</button>
       </div>
-      <p class="small">Keys: A / D or arrow keys for left and right, W or Space for jump, S for stop. On a phone, tap the buttons. Press the backtick key for the debug panel.</p>
+      <p class="small">Keys: A / D or arrow keys for left and right, W or Space for jump, S for stop, Esc to quit to this screen. On a phone, tap the buttons. Press the backtick key for the debug panel.</p>
       <p id="bootError" hidden></p>
     </div>
   </section>
@@ -178,7 +185,7 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
           <div><dt>Incidents this shift</dt><dd id="cardCount"></dd></div>
         </dl>
       </div>
-      <div class="row"><button id="cardGo" class="btn" type="button">Re-onboard</button><span class="keyhint">Space or Enter</span></div>
+      <div class="row"><button id="cardGo" class="btn" type="button">Re-onboard</button><button id="cardQuit" class="btn ghost" type="button">Quit</button><span class="keyhint">Space or Enter to retry, Esc to quit</span></div>
     </div>
   </section>
 
@@ -195,6 +202,7 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
       <div class="row">
         <button class="btn" id="endAgain" type="button">Replay</button>
         <button class="btn ghost" id="openGallery2" type="button">Incident reports</button>
+        <button class="btn ghost" id="endQuit" type="button">Title screen</button>
       </div>
     </div>
   </section>
