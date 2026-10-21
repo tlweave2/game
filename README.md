@@ -14,9 +14,9 @@ python3 -m http.server 8000
 
 Open http://localhost:8000/ and press Begin. Add `?debug=1` (or press the backtick key) for a scene jump list and a live timer readout.
 
-Controls: A / D or arrow keys for left and right, W or Space for jump, S for stop. On a phone, tap the buttons.
+Controls: A / D or arrow keys for left and right, W or Space for jump, S for stop. Only the moves a prompt shows are live, and a prompt offers at most three. On a phone, tap the buttons.
 
-In the Lobby the correct answer is to do nothing or press STOP. Jump and the lateral moves each file a different incident report.
+In the Lobby the correct answer is to do nothing or press STOP. Jump and Left each file a different incident report.
 
 ## How it fits together
 
@@ -34,7 +34,7 @@ In the Lobby the correct answer is to do nothing or press STOP. Jump and the lat
 ## Scene types
 
 - `cutscene`: plays `clip`, then goes to `next`.
-- `reflex`: plays `clip`. At `decisionAt` seconds a prompt opens for `window` seconds. `inputs` maps each action to the next scene. `timeout` is where it goes if the player does nothing. The last frame holds while the prompt is open.
+- `reflex`: plays `clip`. At `decisionAt` seconds a prompt opens for `window` seconds. `prompt` lists the choices shown (three at most). `inputs` maps each action to the next scene. `timeout` is where it goes if the player does nothing. The last frame holds while the prompt is open.
 - `success`: plays `clip`, optionally stamps a `stamp` document into the player's file, then goes to `next`.
 - `death`: plays `clip`, then shows an incident report built from `card`, then returns to the retry scene. `flip: true` mirrors the clip, so one left-lunge clip serves both directions. `faceOverlay` gives the time window and a rectangle (fractions of the frame) where the player's badge photo is drawn over the reaction shot.
 - `end`: shows the personnel file and a closing line.
