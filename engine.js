@@ -1,7 +1,7 @@
 // Orientation Day player. No dependencies, no build step.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js';
+import * as music from './music.js?v=6';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -544,7 +544,7 @@ function wire() {
 
 async function boot() {
   loadSave();
-  const res = await fetch('scenes.json');
+  const res = await fetch('scenes.json', { cache: 'no-cache' });
   data = await res.json();
   scenes = data.scenes;
   $('#title').textContent = data.title;
