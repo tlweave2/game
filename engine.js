@@ -24,6 +24,10 @@ const ACTIONS = {
 let data = null;
 let scenes = {};
 const pool = new Map();
+// Emptied <video> elements kept for reuse. Safari only lets a clip with sound play
+// from an element that was started inside a tap or key press, so elements are
+// unlocked on input and then recycled rather than thrown away.
+const spares = [];
 
 const state = {
   token: 0,
@@ -62,26 +66,45 @@ function save() {
 function getClip(file) {
   let v = pool.get(file);
   if (!v) {
-    v = document.createElement('video');
-    v.className = 'clip';
-    v.playsInline = true;
-    v.setAttribute('playsinline', '');
-    v.preload = 'auto';
+    v = spares.pop();
+    if (!v) {
+      v = document.createElement('video');
+      v.className = 'clip';
+      v.playsInline = true;
+      v.setAttribute('playsinline', '');
+      v.setAttribute('webkit-playsinline', '');
+      v.preload = 'auto';
+      stage.insertBefore(v, faceCanvas);
+    }
+    v.muted = false;
     v.src = 'clips/' + file;
-    stage.insertBefore(v, faceCanvas);
+    v.load();
     pool.set(file, v);
   }
   return v;
+}
+
+// Run inside a user gesture. Starting and pausing each idle clip marks the element
+// as allowed to play with sound later (Safari), and makes iOS start buffering it.
+function unlock() {
+  for (const v of [...pool.values(), ...spares]) {
+    if (v.dataset.unlocked || !v.paused || v.classList.contains('active')) continue;
+    v.dataset.unlocked = '1';
+    const p = v.play();
+    if (p) p.catch(() => {});
+    v.pause();
+  }
 }
 
 function prune(keep) {
   for (const [file, v] of pool) {
     if (!keep.has(file) && !v.classList.contains('active')) {
       v.pause();
+      v.onended = null;
       v.removeAttribute('src');
       v.load();
-      v.remove();
       pool.delete(file);
+      spares.push(v);
     }
   }
 }
@@ -144,7 +167,15 @@ async function enter(id) {
   v.style.transform = sc.flip ? 'scaleX(-1)' : '';
   await whenReady(v);
   if (tok !== state.token) return;
-  try { await v.play(); } catch (e) { console.warn('play() blocked', e); }
+  try {
+    await v.play();
+  } catch (e) {
+    // Autoplay with sound refused (Safari without a recent tap). Muted always plays.
+    console.warn('play() blocked, retrying muted', e);
+    v.muted = true;
+    try { await v.play(); } catch (e2) { console.warn('muted play() blocked', e2); }
+  }
+  if (tok !== state.token) return;
   swapTo(v);
   state.cur = v;
   v.onended = () => { if (tok === state.token) onEnded(sc); };
@@ -268,6 +299,16 @@ function speak(text) {
 }
 
 // ------------------------------------------------------------------ face overlay
+// iOS only speaks after a first utterance started from a tap.
+function primeSpeech() {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  } catch (e) { /* ignore */ }
+}
+
 function sizeCanvas() {
   const r = stage.getBoundingClientRect();
   const d = Math.min(2, window.devicePixelRatio || 1);
@@ -368,6 +409,46 @@ function showEnd(sc) {
   $('#endAgain').focus({ preventScroll: true });
 }
 
+// Back to the title screen. A web page cannot close its own tab, so this is "exit".
+function quit() {
+  state.token++;
+  cancelAnimationFrame(state.raf);
+  clearTimeout(state.winTimer);
+  clearTimeout(state.capTimer);
+  state.win = null;
+  state.cur = null;
+  state.started = false;
+  hidePrompt();
+  hideCard();
+  $('#captions').classList.remove('show');
+  $('#end').hidden = true;
+  $('#gallery').hidden = true;
+  for (const v of pool.values()) { v.onended = null; v.pause(); v.classList.remove('active'); }
+  faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+  music.stop();
+  try { speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+  if (fullscreenEl()) toggleFullscreen();
+  $('#start').hidden = false;
+  $('#startGo').focus({ preventScroll: true });
+}
+
+function fullscreenEl() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function toggleFullscreen() {
+  const el = $('#app');
+  try {
+    if (fullscreenEl()) {
+      const p = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      if (p && p.catch) p.catch(() => {});
+    } else {
+      const p = (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch (e) { /* optional */ }
+}
+
 function buildGallery() {
   const list = $('#galleryList');
   list.innerHTML = '';
@@ -412,9 +493,11 @@ function buildDebug() {
 
 // ------------------------------------------------------------------ boot
 function begin() {
+  unlock();
   state.opts.captions = $('#optCaptions').checked;
   state.opts.tts = $('#optTts').checked;
   state.opts.extra = $('#optExtra').checked;
+  if (state.opts.tts) primeSpeech();
   music.setMuted(!$('#optMusic').checked);
   music.start();
   $('#start').hidden = true;
@@ -435,16 +518,23 @@ function wire() {
   $('#openGallery').addEventListener('click', openGallery);
   $('#openGallery2').addEventListener('click', openGallery);
   $('#galleryClose').addEventListener('click', () => { $('#gallery').hidden = true; });
-  $('#fs').addEventListener('click', () => {
-    const el = $('#app');
-    try { (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen()).catch(() => {}); } catch (e) { /* optional */ }
-  });
+  // iPhone Safari has no element fullscreen, so hide the button where it can't work.
+  const app = $('#app');
+  if (!app.requestFullscreen && !app.webkitRequestFullscreen) $('#fs').hidden = true;
+  $('#fs').addEventListener('click', (e) => { e.currentTarget.blur(); toggleFullscreen(); });
+  $('#quit').addEventListener('click', (e) => { e.currentTarget.blur(); quit(); });
+  $('#cardQuit').addEventListener('click', quit);
+  $('#endQuit').addEventListener('click', quit);
+  // Any tap or key press counts as a gesture: unlock clips that were preloaded since the last one.
+  window.addEventListener('pointerdown', unlock, true);
+  window.addEventListener('keydown', unlock, true);
   window.addEventListener('resize', sizeCanvas);
   new ResizeObserver(sizeCanvas).observe(stage);
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Backquote') { $('#debug').hidden = !$('#debug').hidden; return; }
     if (!$('#gallery').hidden) { if (e.code === 'Escape') $('#gallery').hidden = true; return; }
     if (!$('#start').hidden) return;
+    if (e.code === 'Escape') { e.preventDefault(); quit(); return; }
     if (e.code === 'KeyM') { music.setMuted(!music.isMuted()); return; }
     if (!$('#card').hidden && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); retryAfterCard(); return; }
     const a = KEYS[e.code];
