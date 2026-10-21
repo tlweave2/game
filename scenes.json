@@ -1,0 +1,99 @@
+{
+  "title": "Orientation Day",
+  "tagline": "Your safety is our priority. (Terms apply.)",
+  "start": "respawn",
+  "retry": "respawn",
+  "scenes": {
+    "respawn": {
+      "type": "cutscene",
+      "clip": "respawn.mp4",
+      "next": "lobby_intro",
+      "captions": [
+        { "at": 0.4, "who": "Cheryl", "text": "Welcome to Doomsworth & Associates! Your file has been reopened." },
+        { "at": 1.5, "who": "Cheryl", "onlyFirst": true, "text": "Benefits include dental, vision, and the legal right to leave the building." }
+      ]
+    },
+
+    "lobby_intro": {
+      "type": "reflex",
+      "clip": "lobby_intro.mp4",
+      "decisionAt": 3.1,
+      "window": 1.5,
+      "prompt": ["left", "right", "jump", "stop"],
+      "inputs": {
+        "stop": "lobby_success",
+        "jump": "lobby_death_jump",
+        "left": "lobby_death_left",
+        "right": "lobby_death_right"
+      },
+      "timeout": "lobby_success",
+      "captions": [
+        { "at": 0.8, "who": "Cheryl", "text": "Please be mindful of the laser grid. Laser safety is everyone's responsibility." }
+      ]
+    },
+
+    "lobby_success": {
+      "type": "success",
+      "clip": "lobby_success.mp4",
+      "stamp": { "id": "visitor_log", "label": "Visitor Log (signed)" },
+      "next": "lobby_end",
+      "captions": [
+        { "at": 0.9, "who": "Cheryl", "text": "Wonderful stillness. Your productivity has not been affected." }
+      ]
+    },
+
+    "lobby_death_jump": {
+      "type": "death",
+      "clip": "lobby_death_jump.mp4",
+      "deathId": "001",
+      "card": {
+        "violation": "Unauthorized Jumping",
+        "level": "Level 2",
+        "action": "Form 27-B, Posthumous Awareness Training"
+      },
+      "faceOverlay": { "at": 1.0, "until": 1.55, "rect": [0.43, 0.24, 0.15, 0.36] },
+      "captions": [
+        { "at": 1.8, "who": "Cheryl", "text": "Jumping in a monitored corridor is a Level 2 safety violation." }
+      ]
+    },
+
+    "lobby_death_left": {
+      "type": "death",
+      "clip": "lobby_death_side.mp4",
+      "deathId": "002",
+      "card": {
+        "violation": "Unauthorized Lateral Movement",
+        "level": "Level 3",
+        "action": "Form 14-C, Hallway Etiquette Refresher (in triplicate)"
+      },
+      "faceOverlay": { "at": 1.0, "until": 1.55, "rect": [0.43, 0.24, 0.15, 0.36] },
+      "captions": [
+        { "at": 1.8, "who": "Cheryl", "text": "Lateral movement has been noted and filed." }
+      ]
+    },
+
+    "lobby_death_right": {
+      "type": "death",
+      "clip": "lobby_death_side.mp4",
+      "flip": true,
+      "deathId": "002",
+      "card": {
+        "violation": "Unauthorized Lateral Movement",
+        "level": "Level 3",
+        "action": "Form 14-C, Hallway Etiquette Refresher (in triplicate)"
+      },
+      "faceOverlay": { "at": 1.0, "until": 1.55, "rect": [0.43, 0.24, 0.15, 0.36] },
+      "captions": [
+        { "at": 1.8, "who": "Cheryl", "text": "Lateral movement has been noted and filed." }
+      ]
+    },
+
+    "lobby_end": {
+      "type": "end",
+      "heading": "Room 1 complete",
+      "who": "Desmond",
+      "text": "Look at that. Already filling forms. I like this one.",
+      "note": "That is the end of the vertical slice. The Break Room is still under construction."
+    }
+  }
+}

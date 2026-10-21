@@ -1,0 +1,216 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orientation Day</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Libre+Franklin:wght@800;900&display=swap">
+<style>
+/* Layout concept: a letterboxed kiosk screen with a prompt dock underneath.
+   Overlays are paperwork: title screen, incident report, personnel file. */
+:root {
+  --ink: #1b1613;
+  --ink-2: #26201b;
+  --paper: #efe6d2;
+  --beige: #d9c7a5;
+  --tan: #b89968;
+  --gray: #7d7f83;
+  --red: #c8322b;
+  --text: #f3ecdc;
+  --muted: #b3a88f;
+  --display: "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font: 14px/1.45 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px;
+}
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--beige); outline-offset: 2px; }
+
+#app { max-width: 1120px; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+
+/* ---- stage ---- */
+#stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; container-type: inline-size; border: 1px solid #3a322a; }
+.clip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; z-index: 1; background: #000; }
+.clip.active { opacity: 1; z-index: 2; }
+#face { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+#hud { position: absolute; z-index: 4; top: 2cqw; left: 2cqw; padding: 0.6cqw 1.4cqw; background: rgba(27, 22, 19, 0.78); font: 500 clamp(9px, 1.7cqw, 15px)/1.2 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--beige); }
+#hud b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+#fs { position: absolute; z-index: 4; top: 2cqw; right: 2cqw; padding: 0.6cqw 1.4cqw; background: rgba(27, 22, 19, 0.78); border: 0; cursor: pointer; font: 500 clamp(9px, 1.7cqw, 15px)/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--beige); }
+#captions { position: absolute; z-index: 4; left: 50%; bottom: 4cqw; transform: translateX(-50%); width: min(86cqw, 900px); padding: 1.1cqw 2cqw; background: rgba(27, 22, 19, 0.86); opacity: 0; transition: opacity 0.18s; pointer-events: none; font-size: clamp(11px, 2.3cqw, 24px); line-height: 1.3; text-align: center; }
+#captions.show { opacity: 1; }
+#who { display: block; margin-bottom: 0.2em; font: 500 0.62em/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tan); }
+
+/* ---- dock ---- */
+#dock { min-height: 96px; display: grid; align-content: center; gap: 8px; padding: 10px 12px; background: var(--ink-2); border: 1px solid #3a322a; }
+#idle { margin: 0; color: var(--muted); text-align: center; }
+#dock.live #idle { display: none; }
+#timer { height: 6px; background: #3a322a; }
+#timer i { display: block; height: 100%; background: var(--red); transform-origin: left center; }
+#choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.choice { display: grid; justify-items: center; gap: 2px; padding: 12px 6px; background: var(--paper); color: #231b15; border: 0; border-bottom: 4px solid var(--tan); cursor: pointer; touch-action: manipulation; user-select: none; }
+.choice:active { transform: translateY(2px); border-bottom-width: 2px; }
+.choice .glyph { font-size: 20px; line-height: 1; color: var(--red); }
+.choice .label { font: 900 16px/1.1 var(--display); text-transform: uppercase; letter-spacing: 0.06em; }
+.choice .hint { font: 400 11px/1.2 var(--mono); color: #5d5143; }
+@media (max-width: 520px) { #choices { grid-template-columns: repeat(2, 1fr); } .choice .hint { display: none; } }
+
+/* ---- overlays ---- */
+.overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: rgba(18, 14, 11, 0.84); }
+#gallery { z-index: 30; }
+.panel { width: min(100%, 560px); display: grid; gap: 14px; }
+h1, h2 { margin: 0; font-family: var(--display); font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; text-wrap: balance; }
+h1 { font-size: clamp(34px, 9vw, 76px); line-height: 0.95; }
+h2 { font-size: clamp(22px, 5vw, 34px); line-height: 1; }
+.tag { margin: 0; color: var(--beige); font-size: 16px; }
+.btn { justify-self: start; padding: 12px 20px; background: var(--red); color: var(--paper); border: 0; cursor: pointer; font: 900 15px/1 var(--display); text-transform: uppercase; letter-spacing: 0.08em; }
+.btn:disabled { opacity: 0.5; cursor: progress; }
+.btn.ghost { background: transparent; color: var(--beige); border: 1px solid var(--tan); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+fieldset { margin: 0; padding: 12px 14px; border: 1px dashed var(--tan); display: grid; gap: 8px; }
+legend { padding: 0 6px; font: 500 11px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tan); }
+label.opt { display: flex; gap: 8px; align-items: center; }
+#facePreview { width: 40px; height: 40px; object-fit: cover; border-radius: 50%; border: 2px solid var(--tan); }
+.small { margin: 0; font-size: 12px; color: var(--muted); }
+#bootError { margin: 0; color: #ff9d94; }
+
+/* ---- incident report ---- */
+.paper { width: min(100%, 560px); display: grid; gap: 14px; padding: 18px; background: var(--paper); color: #231b15; font-family: var(--mono); box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.45); }
+.paper header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 2px solid #231b15; }
+#cardNo { font: 900 clamp(15px, 3.6vw, 22px)/1 var(--display); text-transform: uppercase; letter-spacing: 0.04em; }
+.stamp { padding: 2px 8px; border: 2px solid var(--red); color: var(--red); transform: rotate(-4deg); font: 500 12px/1.3 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.paper .body { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; }
+.paper figure { margin: 0; display: grid; gap: 6px; align-content: start; }
+#badge { width: 112px; height: 140px; object-fit: cover; border: 2px solid #231b15; background: #c9bda6; filter: saturate(calc(1 - var(--tired, 0) * 0.55)) sepia(calc(var(--tired, 0) * 0.35)); transform: rotate(calc(var(--tired, 0) * -3deg)); }
+.paper figcaption { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.fatigue { height: 5px; background: #cdbfa5; }
+.fatigue i { display: block; height: 100%; width: calc(var(--tired, 0) * 100%); background: var(--red); }
+dl { margin: 0; display: grid; gap: 8px; min-width: 0; }
+dt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b5d4b; }
+dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.keyhint { font-size: 11px; color: #6b5d4b; }
+@media (max-width: 420px) { .paper .body { grid-template-columns: 1fr; } #badge { width: 84px; height: 105px; } }
+
+/* ---- end + gallery ---- */
+.quote { margin: 0; padding-left: 12px; border-left: 4px solid var(--red); font-size: 18px; }
+.quote span { display: block; font: 500 11px/1.6 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tan); }
+ul.plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px solid var(--tan); }
+#galleryList li b { font: 500 13px var(--mono); color: var(--tan); margin-right: 6px; }
+#galleryList li em { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); font-style: normal; }
+#galleryList li.locked { opacity: 0.6; }
+
+/* ---- debug ---- */
+#debug { position: fixed; z-index: 40; left: 8px; bottom: 8px; max-width: min(420px, 92vw); max-height: 40vh; overflow: auto; padding: 8px; display: grid; gap: 6px; background: rgba(0, 0, 0, 0.85); font: 11px/1.3 var(--mono); }
+#dbgJump { display: flex; flex-wrap: wrap; gap: 4px; }
+#dbgJump button { padding: 3px 6px; background: var(--ink-2); border: 1px solid var(--gray); cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) { #captions { transition: none; } }
+</style>
+
+<div id="app">
+  <div id="stage">
+    <canvas id="face" aria-hidden="true"></canvas>
+    <div id="hud" aria-live="off">Incidents <b id="hudDeaths">0</b> &middot; File <b id="hudFile">0</b></div>
+    <button id="fs" type="button">Fullscreen</button>
+    <div id="captions" role="status" aria-live="polite"><span id="who"></span><span id="line"></span></div>
+  </div>
+
+  <div id="dock">
+    <p id="idle">Watch the hallway. When the prompt appears, choose fast.</p>
+    <div id="prompt" hidden>
+      <div id="timer"><i></i></div>
+      <div id="choices"></div>
+    </div>
+  </div>
+
+  <section id="start" class="overlay" aria-labelledby="title">
+    <div class="panel">
+      <h1 id="title">Orientation Day</h1>
+      <p class="tag" id="tagline"></p>
+      <fieldset>
+        <legend>Settings</legend>
+        <label class="opt"><input type="checkbox" id="optCaptions" checked> Captions</label>
+        <label class="opt"><input type="checkbox" id="optTts"> Placeholder voice (browser speech, until real recordings exist)</label>
+        <label class="opt"><input type="checkbox" id="optExtra"> Extra time on prompts</label>
+      </fieldset>
+      <fieldset>
+        <legend>Badge photo (optional)</legend>
+        <div class="row">
+          <input type="file" id="facePick" accept="image/*">
+          <img id="facePreview" alt="Your badge photo preview" hidden>
+        </div>
+        <p class="small">Stays on this device. It is only drawn onto your incident reports and the reaction shots.</p>
+      </fieldset>
+      <div class="row">
+        <button class="btn" id="startGo" type="button" disabled>Begin orientation</button>
+        <button class="btn ghost" id="openGallery" type="button">Incident reports</button>
+      </div>
+      <p class="small">Keys: A / D or arrow keys for left and right, W or Space for jump, S for stop. On a phone, tap the buttons. Press the backtick key for the debug panel.</p>
+      <p id="bootError" hidden></p>
+    </div>
+  </section>
+
+  <section id="card" class="overlay" hidden aria-live="polite">
+    <div class="paper">
+      <header><span id="cardNo"></span><span class="stamp">Received</span></header>
+      <div class="body">
+        <figure>
+          <img id="badge" alt="Employee badge photo">
+          <figcaption>Employee badge</figcaption>
+          <div class="fatigue" title="Fatigue index"><i></i></div>
+        </figure>
+        <dl>
+          <div><dt>Violation</dt><dd id="cardWhat"></dd></div>
+          <div><dt>Severity</dt><dd id="cardLevel"></dd></div>
+          <div><dt>Items carried</dt><dd id="cardItems"></dd></div>
+          <div><dt>Corrective action</dt><dd id="cardAction"></dd></div>
+          <div><dt>Incidents this shift</dt><dd id="cardCount"></dd></div>
+        </dl>
+      </div>
+      <div class="row"><button id="cardGo" class="btn" type="button">Re-onboard</button><span class="keyhint">Space or Enter</span></div>
+    </div>
+  </section>
+
+  <section id="end" class="overlay" hidden>
+    <div class="panel">
+      <h2 id="endHeading"></h2>
+      <blockquote class="quote"><span id="endWho"></span><p id="endLine" style="margin:0"></p></blockquote>
+      <div>
+        <p class="small">Your file</p>
+        <ul class="plain" id="endFile"></ul>
+      </div>
+      <p class="small" id="endStats"></p>
+      <p class="small" id="endNote"></p>
+      <div class="row">
+        <button class="btn" id="endAgain" type="button">Replay</button>
+        <button class="btn ghost" id="openGallery2" type="button">Incident reports</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="gallery" class="overlay" hidden aria-labelledby="galleryTitle">
+    <div class="panel">
+      <h2 id="galleryTitle">Incident reports</h2>
+      <p class="small" id="galleryCount"></p>
+      <ul class="plain" id="galleryList"></ul>
+      <button class="btn ghost" id="galleryClose" type="button">Close</button>
+    </div>
+  </section>
+</div>
+
+<aside id="debug" hidden>
+  <div id="dbgInfo"></div>
+  <div id="dbgJump"></div>
+</aside>
+
+<script type="module" src="engine.js"></script>
