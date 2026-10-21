@@ -6,7 +6,7 @@
   "scenes": {
     "respawn": {
       "type": "cutscene",
-      "clip": "respawn.mp4",
+      "clip": "respawn_pod.mp4",
       "next": "lobby_intro",
       "captions": [
         { "at": 0.4, "who": "Cheryl", "text": "Welcome to Doomsworth & Associates! Your file has been reopened." },
@@ -44,16 +44,16 @@
 
     "lobby_death_jump": {
       "type": "death",
-      "clip": "lobby_death_jump.mp4",
+      "clip": "lobby_death_jump_binders.mp4",
       "deathId": "001",
       "card": {
         "violation": "Unauthorized Jumping",
         "level": "Level 2",
         "action": "Form 27-B, Posthumous Awareness Training"
       },
-      "faceOverlay": { "at": 1.0, "until": 1.55, "rect": [0.43, 0.24, 0.15, 0.36] },
+      "faceOverlay": { "at": 2.0, "until": 2.8, "rect": [0.455, 0.06, 0.09, 0.23] },
       "captions": [
-        { "at": 1.8, "who": "Cheryl", "text": "Jumping in a monitored corridor is a Level 2 safety violation." }
+        { "at": 3.4, "who": "Cheryl", "text": "Jumping in a monitored corridor is a Level 2 safety violation." }
       ]
     },
 
