@@ -1,7 +1,7 @@
 // Orientation Day player. No dependencies, no build step.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=6';
+import * as music from './music.js?v=7';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -146,6 +146,7 @@ async function enter(id) {
   const sc = scenes[id];
   if (!sc) { console.error('Unknown scene', id); return; }
   const tok = ++state.token;
+  hushVoice(false);
   cancelAnimationFrame(state.raf);
   clearTimeout(state.winTimer);
   state.id = id;
@@ -205,11 +206,14 @@ function loop(tok) {
 }
 
 function onEnded(sc) {
-  if (sc.type === 'cutscene') enter(sc.next);
+  // Cutscenes and successes hold their last frame until Cheryl finishes talking.
+  const tok = state.token;
+  const go = (fn) => afterVoice(() => { if (tok === state.token) fn(); });
+  if (sc.type === 'cutscene') go(() => enter(sc.next));
   else if (sc.type === 'success') {
     if (sc.stamp && !state.file.find((f) => f.id === sc.stamp.id)) state.file.push(sc.stamp);
     hud();
-    enter(sc.next);
+    go(() => enter(sc.next));
   } else if (sc.type === 'death') {
     state.deaths++;
     if (sc.deathId) state.seen.add(sc.deathId);
@@ -267,22 +271,59 @@ function answer(action) {
 }
 
 // ------------------------------------------------------------------ captions + voice
+// Recorded lines go through one voice channel so they never talk over each other.
+// A line that comes up while another is playing waits its turn.
+const voice = { cur: null, queue: [], idle: [] };
+
 function say(c) {
-  const who = c.who || 'Cheryl';
-  music.duck(c.hold || 2600 + c.text.length * 38);
-  if (state.opts.captions) {
-    $('#who').textContent = who;
-    $('#line').textContent = c.text;
-    $('#captions').classList.add('show');
-    clearTimeout(state.capTimer);
-    state.capTimer = setTimeout(() => $('#captions').classList.remove('show'), c.hold || 2600 + c.text.length * 38);
-  }
+  if (c.audio && (voice.cur || voice.queue.length)) { voice.queue.push(c); return; }
+  speakLine(c);
+}
+
+function speakLine(c) {
+  const est = c.hold || 2600 + c.text.length * 38;
+  showCaption(c, est);
+  music.duck(est);
   if (c.audio) {
     const a = new Audio('audio/' + c.audio);
-    a.play().catch(() => speak(c.text));
+    voice.cur = a;
+    const next = () => { if (voice.cur !== a) return; voice.cur = null; voiceNext(); };
+    a.onloadedmetadata = () => { if (isFinite(a.duration)) { showCaption(c, a.duration * 1000 + 400); music.duck(a.duration * 1000); } };
+    a.onended = next;
+    a.onerror = () => { speak(c.text); next(); };
+    a.play().catch(() => { speak(c.text); next(); });
   } else if (state.opts.tts) {
     speak(c.text);
   }
+}
+
+function showCaption(c, ms) {
+  if (!state.opts.captions) return;
+  $('#who').textContent = c.who || 'Cheryl';
+  $('#line').textContent = c.text;
+  $('#captions').classList.add('show');
+  clearTimeout(state.capTimer);
+  state.capTimer = setTimeout(() => $('#captions').classList.remove('show'), ms);
+}
+
+function voiceNext() {
+  if (voice.queue.length) { speakLine(voice.queue.shift()); return; }
+  const waiting = voice.idle;
+  voice.idle = [];
+  waiting.forEach((f) => f());
+}
+
+// Runs fn once nothing is playing or queued.
+function afterVoice(fn) {
+  if (!voice.cur && !voice.queue.length) fn();
+  else voice.idle.push(fn);
+}
+
+// Drops queued lines; with hard, also cuts the one playing.
+function hushVoice(hard) {
+  voice.queue = [];
+  voice.idle = [];
+  if (hard && voice.cur) { voice.cur.onended = voice.cur.onerror = null; voice.cur.pause(); voice.cur = null; }
 }
 
 function speak(text) {
@@ -390,6 +431,7 @@ function retryAfterCard() {
   const sc = state.cardFor;
   if (!sc) return;
   hideCard();
+  hushVoice(true);
   music.start();
   enter(sc.retry || data.retry);
 }
@@ -426,6 +468,7 @@ function quit() {
   for (const v of pool.values()) { v.onended = null; v.pause(); v.classList.remove('active'); }
   faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
   music.stop();
+  hushVoice(true);
   try { speechSynthesis.cancel(); } catch (e) { /* ignore */ }
   if (fullscreenEl()) toggleFullscreen();
   $('#start').hidden = false;

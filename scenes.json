@@ -9,8 +9,8 @@
       "clip": "respawn_pod.mp4",
       "next": "lobby_intro",
       "captions": [
-        { "at": 0.4, "who": "Cheryl", "text": "Welcome to Doomsworth & Associates! Your file has been reopened." },
-        { "at": 1.5, "who": "Cheryl", "onlyFirst": true, "text": "Benefits include dental, vision, and the legal right to leave the building." }
+        { "at": 0.4, "who": "Cheryl", "text": "Welcome to Doomsworth & Associates! Your file has been reopened.", "audio": "cheryl_01_welcome.mp3" },
+        { "at": 1.5, "who": "Cheryl", "onlyFirst": true, "text": "Benefits include dental, vision, and the legal right to leave the building.", "audio": "cheryl_02_benefits.mp3" }
       ]
     },
 
@@ -27,7 +27,7 @@
       },
       "timeout": "lobby_success",
       "captions": [
-        { "at": 0.8, "who": "Cheryl", "text": "Please be mindful of the laser grid. Laser safety is everyone's responsibility." }
+        { "at": 0.3, "who": "Cheryl", "text": "Please be mindful of the laser grid. Laser safety is everyone's responsibility.", "audio": "cheryl_03_laser_grid.mp3" }
       ]
     },
 
@@ -37,7 +37,7 @@
       "stamp": { "id": "visitor_log", "label": "Visitor Log (signed)" },
       "next": "lobby_end",
       "captions": [
-        { "at": 0.9, "who": "Cheryl", "text": "Wonderful stillness. Your productivity has not been affected." }
+        { "at": 0.9, "who": "Cheryl", "text": "Wonderful stillness. Your productivity has not been affected.", "audio": "cheryl_06_stillness.mp3" }
       ]
     },
 
@@ -52,7 +52,7 @@
       },
       "faceOverlay": { "at": 2.0, "until": 2.8, "rect": [0.455, 0.06, 0.09, 0.23] },
       "captions": [
-        { "at": 3.4, "who": "Cheryl", "text": "Jumping in a monitored corridor is a Level 2 safety violation." }
+        { "at": 3.4, "who": "Cheryl", "text": "Jumping in a monitored corridor is a Level 2 safety violation.", "audio": "cheryl_07_jump_violation.mp3" }
       ]
     },
 
@@ -67,7 +67,7 @@
       },
       "faceOverlay": { "at": 1.0, "until": 1.55, "rect": [0.43, 0.24, 0.15, 0.36] },
       "captions": [
-        { "at": 1.8, "who": "Cheryl", "text": "Lateral movement has been noted and filed." }
+        { "at": 1.8, "who": "Cheryl", "text": "Lateral movement has been noted and filed.", "audio": "cheryl_08_lateral_filed.mp3" }
       ]
     },
 
