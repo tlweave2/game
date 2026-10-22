@@ -1,7 +1,7 @@
 // Orientation Day player. No dependencies, no build step.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=7';
+import * as music from './music.js?v=8';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -358,7 +358,7 @@ function sizeCanvas() {
 }
 
 // faceOverlay is either a fixed { at, until, rect } or a tracked
-// { track: [[t, cx, cy], ...], size: [w, h], fade } in stage fractions,
+// { track: [[t, cx, cy, scale?], ...], size: [w, h], fade } in stage fractions,
 // following the hero's head frame by frame (see tools/track_face.py).
 function facePose(f, t) {
   if (!f.track) {
@@ -371,11 +371,12 @@ function facePose(f, t) {
   if (t < t0 || t > t1) return null;
   let i = 1;
   while (i < k.length - 1 && k[i][0] < t) i++;
-  const [ta, xa, ya] = k[i - 1], [tb, xb, yb] = k[i];
+  const [ta, xa, ya, sa = 1] = k[i - 1], [tb, xb, yb, sb = 1] = k[i];
   const u = tb > ta ? Math.min(1, Math.max(0, (t - ta) / (tb - ta))) : 0;
   const fade = f.fade || 0;
   const a = fade ? Math.min(1, (t - t0) / fade, (t1 - t) / fade) : 1;
-  return { cx: xa + (xb - xa) * u, cy: ya + (yb - ya) * u, w: f.size[0], h: f.size[1], a, wob: 0 };
+  const sc = sa + (sb - sa) * u;
+  return { cx: xa + (xb - xa) * u, cy: ya + (yb - ya) * u, w: f.size[0] * sc, h: f.size[1] * sc, a, wob: 0 };
 }
 
 function drawFace(sc, t) {
@@ -407,37 +408,56 @@ function drawFace(sc, t) {
   faceCtx.restore();
 }
 
-// Turn a photo into the clips' cartoon look: flat bands of shade that keep
-// the player's own colouring, a light sepia wash, and dark ink lines where
-// the shading changes sharply.
+// Box-blur an RGBA buffer in place (horizontal then vertical). Done by hand
+// because canvas ctx.filter is missing in Safari.
+function boxBlur(d, n, m, r) {
+  const tmp = new Float32Array(d.length);
+  const pass = (src, dst, along, across, stride, step) => {
+    for (let a = 0; a < across; a++) {
+      for (let ch = 0; ch < 3; ch++) {
+        let sum = 0;
+        const at = (k) => src[(a * stride + Math.min(along - 1, Math.max(0, k)) * step) * 4 + ch];
+        for (let k = -r; k <= r; k++) sum += at(k);
+        for (let k = 0; k < along; k++) {
+          dst[(a * stride + k * step) * 4 + ch] = sum / (2 * r + 1);
+          sum += at(k + r + 1) - at(k - r);
+        }
+      }
+    }
+  };
+  pass(d, tmp, n, m, n, 1);
+  pass(tmp, d, m, n, 1, n);
+}
+
+// Turn a photo into the clips' cartoon look: smoothed, flat bands of shade
+// that keep the player's own colouring, a light sepia wash, and thick dark
+// ink lines where the shading changes sharply.
 function cartoonize(c) {
   const x = c.getContext('2d');
   const n = c.width, m = c.height;
   let img;
   try { img = x.getImageData(0, 0, n, m); } catch (e) { return c; }
   const d = img.data;
+  boxBlur(d, n, m, 2);
   const lum = new Float32Array(n * m);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) lum[j] = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
   const ink = new Uint8Array(n * m);
-  for (let yy = 1; yy < m - 1; yy++) {
-    for (let xx = 1; xx < n - 1; xx++) {
+  for (let yy = 1; yy < m - 2; yy++) {
+    for (let xx = 1; xx < n - 2; xx++) {
       const o = yy * n + xx;
       const gx = lum[o - n + 1] + 2 * lum[o + 1] + lum[o + n + 1] - lum[o - n - 1] - 2 * lum[o - 1] - lum[o + n - 1];
       const gy = lum[o + n - 1] + 2 * lum[o + n] + lum[o + n + 1] - lum[o - n - 1] - 2 * lum[o - n] - lum[o - n + 1];
-      if (gx * gx + gy * gy > 6400) ink[o] = ink[o + 1] = ink[o + n] = ink[o + n + 1] = 1;
+      if (gx * gx + gy * gy > 3600) ink[o] = ink[o + 1] = ink[o + n] = ink[o + n + 1] = 1;
     }
   }
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
     if (ink[j]) { d[i] = 59; d[i + 1] = 42; d[i + 2] = 32; continue; }
     const l = lum[j];
-    const band = Math.min(245, Math.round(l / 60) * 60 + 25);
-    for (let ch = 0; ch < 3; ch++) {
-      const v = band + (d[i + ch] - l) * 0.85;
-      d[i + ch] = v;
-    }
-    d[i] = d[i] * 0.88 + 0.12 * 236;
-    d[i + 1] = d[i + 1] * 0.88 + 0.12 * 214;
-    d[i + 2] = d[i + 2] * 0.88 + 0.12 * 178;
+    const band = Math.min(228, Math.round(l / 64) * 64 + 14);
+    for (let ch = 0; ch < 3; ch++) d[i + ch] = band + (d[i + ch] - l) * 1.1;
+    d[i] = d[i] * 0.85 + 0.15 * 236;
+    d[i + 1] = d[i + 1] * 0.85 + 0.15 * 214;
+    d[i + 2] = d[i + 2] * 0.85 + 0.15 * 178;
   }
   x.putImageData(img, 0, 0);
   return c;
@@ -450,16 +470,9 @@ function setFace(file) {
     const s = Math.min(img.width, img.height);
     const c = document.createElement('canvas');
     c.width = c.height = 256;
-    const x = c.getContext('2d');
-    try { x.filter = 'contrast(1.35) saturate(1.5) brightness(1.05)'; } catch (e) { /* unsupported */ }
-    x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
+    c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
+    state.face = cartoonize(c);
     state.faceURL = c.toDataURL('image/jpeg', 0.85);
-    const toon = document.createElement('canvas');
-    toon.width = toon.height = 256;
-    const tx = toon.getContext('2d');
-    try { tx.filter = 'blur(1.5px)'; } catch (e) { /* unsupported */ }
-    tx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
-    state.face = cartoonize(toon);
     $('#facePreview').src = state.faceURL;
     $('#facePreview').hidden = false;
     URL.revokeObjectURL(img.src);
