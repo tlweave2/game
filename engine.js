@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=9';
+import * as music from './music.js?v=10';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -379,6 +379,10 @@ function facePose(f, t) {
   return { cx: xa + (xb - xa) * u, cy: ya + (yb - ya) * u, w: f.size[0] * sc, h: f.size[1] * sc, a, wob: 0 };
 }
 
+// How much bigger than the tracked size to draw the player's face, so it
+// covers the hero's cartoon face. Tune here.
+const FACE_SCALE = 1.2;
+
 function drawFace(sc, t) {
   const f = sc.faceOverlay;
   const W = faceCanvas.width, H = faceCanvas.height;
@@ -387,7 +391,7 @@ function drawFace(sc, t) {
   const p = facePose(f, t);
   if (!p) return;
   const cx = (sc.flip ? 1 - p.cx : p.cx) * W, cy = p.cy * H;
-  const rx = (p.w / 2) * W, ry = (p.h / 2) * H;
+  const rx = (p.w / 2) * W * FACE_SCALE, ry = (p.h / 2) * H * FACE_SCALE;
   faceCtx.save();
   faceCtx.globalAlpha = p.a;
   faceCtx.translate(cx, cy);
