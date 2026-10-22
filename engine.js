@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=15';
+import * as music from './music.js?v=16';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -407,7 +407,7 @@ function sampleLight(v, p) {
     const top = px.slice(0, Math.ceil(px.length / 2));
     light = light.map((old, ch) => {
       const mean = top.reduce((t, q) => t + q[ch], 0) / top.length;
-      const want = Math.min(1, Math.max(0.5, mean / HERO_SKIN[ch]));
+      const want = Math.min(1, Math.max(0.7, Math.pow(mean / HERO_SKIN[ch], 0.7)));
       return old + (want - old) * 0.3;
     });
   } catch (e) { /* tainted or not ready: keep the last value */ }
@@ -585,25 +585,42 @@ function inkFace(c, P) {
   boxBlur(d, n, m, 2);
   const lum = new Float32Array(n * m);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) lum[j] = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
-  // Skin tone from the cheeks and forehead, pulled a little toward the hero's.
+  // Skin tone from patches on the cheeks and forehead.
   const sample = [P[50], P[280], P[151]];
   const skin = [0, 0, 0];
+  let cnt = 0;
   sample.forEach(([px, py]) => {
-    const o = (Math.round(Math.min(m - 1, Math.max(0, py))) * n + Math.round(Math.min(n - 1, Math.max(0, px)))) * 4;
-    for (let ch = 0; ch < 3; ch++) skin[ch] += d[o + ch] / sample.length;
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        const sx = Math.round(Math.min(n - 1, Math.max(0, px + dx))), sy = Math.round(Math.min(m - 1, Math.max(0, py + dy)));
+        const o = (sy * n + sx) * 4;
+        for (let ch = 0; ch < 3; ch++) skin[ch] += d[o + ch];
+        cnt++;
+      }
+    }
   });
-  const base = skin.map((v, ch) => v * 0.75 + HERO_SKIN[ch] * 0.25);
-  const skinL = skin[0] * 0.3 + skin[1] * 0.59 + skin[2] * 0.11;
+  for (let ch = 0; ch < 3; ch++) skin[ch] /= cnt;
+  // Camera colour casts (orange bulbs, blue screens, dim rooms) make raw skin
+  // clash with the cartoon. Take the hue from the hero's palette, keep some of
+  // how light or dark the player's skin is, and colour-correct the photo by
+  // the same amount.
+  const lumOf = (q) => q[0] * 0.3 + q[1] * 0.59 + q[2] * 0.11;
+  const skinL = Math.max(1, lumOf(skin)), heroL = lumOf(HERO_SKIN);
+  // A dim room and darker skin look alike to a camera, so only part of the
+  // difference in lightness carries over.
+  const rel = Math.min(1.05, Math.max(0.68, 0.6 + 0.4 * skinL / heroL));
+  const base = HERO_SKIN.map((v) => v * rel);
+  const wb = base.map((v, ch) => Math.min(2.5, Math.max(0.4, v / Math.max(1, skin[ch]))));
   // Four cel bands (deep shadow, shadow, lit, highlight) keep the shape of
-  // the face, beard and brows; a posterized share of the real photo keeps
-  // its colours, so the player stays recognisable.
+  // the face, beard and brows; a posterized, colour-corrected share of the
+  // real photo keeps its detail, so the player stays recognisable.
   const BANDS = [[0.62, [0.62, 0.55, 0.52]], [0.82, [0.8, 0.74, 0.7]], [1.04, [1, 1, 1]], [Infinity, [1.07, 1.06, 1.05]]];
   const step = 255 / 5;
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
     const k = BANDS.find(([lim]) => lum[j] < skinL * lim)[1];
     for (let ch = 0; ch < 3; ch++) {
-      const poster = Math.round(d[i + ch] / step) * step;
-      d[i + ch] = Math.min(255, base[ch] * k[ch] * 0.65 + poster * 0.35);
+      const poster = Math.round(Math.min(255, d[i + ch] * wb[ch]) / step) * step;
+      d[i + ch] = Math.min(255, base[ch] * k[ch] * 0.7 + poster * 0.3);
     }
   }
   // Light ink where the photo has strong edges (glasses, beard, hairline).
