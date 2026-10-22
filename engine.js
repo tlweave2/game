@@ -1,7 +1,7 @@
-// Orientation Day player. No dependencies, no build step.
+// Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=8';
+import * as music from './music.js?v=9';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -396,9 +396,8 @@ function drawFace(sc, t) {
   faceCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
   faceCtx.save();
   faceCtx.clip();
-  // Zoom past the photo's edges so the ellipse is mostly face, not background.
-  const s = Math.max(rx * 2, ry * 2) * 1.3;
-  faceCtx.drawImage(state.face, -s / 2, -s * 0.47, s, s);
+  // state.face is already cut to the face, so stretch it over the ellipse.
+  faceCtx.drawImage(state.face, -rx, -ry, rx * 2, ry * 2);
   faceCtx.restore();
   faceCtx.lineWidth = Math.max(2, W * 0.003);
   faceCtx.strokeStyle = '#3b2a20';
@@ -463,19 +462,109 @@ function cartoonize(c) {
   return c;
 }
 
+// MediaPipe Face Landmarker finds the face in the player's photo so only the
+// face (no hair, no background) goes on the hero. Loaded from the CDN the
+// first time someone picks a photo; without it we fall back to the middle
+// of the photo.
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+// Face-oval landmark indices, in order around the face.
+const FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
+  152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+const FACE_W = 200, FACE_H = 260;
+let landmarker = null;
+
+function loadLandmarker() {
+  if (!landmarker) {
+    landmarker = (async () => {
+      const { FilesetResolver, FaceLandmarker } = await import(`${MP}/vision_bundle.mjs`);
+      const files = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
+      return FaceLandmarker.createFromOptions(files, {
+        baseOptions: { modelAssetPath: MP_MODEL, delegate: 'CPU' },
+        runningMode: 'IMAGE',
+        numFaces: 1,
+      });
+    })();
+    landmarker.catch(() => { landmarker = null; });
+  }
+  return landmarker;
+}
+
+// Cut the face out, straightened, so its outline fills a FACE_W x FACE_H
+// canvas. pts are pixel [x, y] pairs.
+function cutFace(src, pts) {
+  const l = pts[33], r = pts[263];
+  const ang = Math.atan2(r[1] - l[1], r[0] - l[0]);
+  const cos = Math.cos(-ang), sin = Math.sin(-ang);
+  const oval = FACE_OVAL.map((i) => pts[i]);
+  const mx = oval.reduce((t, p) => t + p[0], 0) / oval.length;
+  const my = oval.reduce((t, p) => t + p[1], 0) / oval.length;
+  const flat = oval.map(([x, y]) => [(x - mx) * cos - (y - my) * sin, (x - mx) * sin + (y - my) * cos]);
+  const xs = flat.map((p) => p[0]), ys = flat.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const sx = FACE_W / (x1 - x0), sy = FACE_H / (y1 - y0);
+  const c = document.createElement('canvas');
+  c.width = FACE_W; c.height = FACE_H;
+  const x = c.getContext('2d');
+  x.translate(-x0 * sx, -y0 * sy);
+  x.scale(sx, sy);
+  x.rotate(-ang);
+  x.translate(-mx, -my);
+  x.drawImage(src, 0, 0);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  return ovalMask(cartoonize(c));
+}
+
+// Keep only the ellipse that fills the canvas. For a face looking at the
+// camera this matches its outline; a turned face keeps a sliver of
+// background rather than leaving holes where the hero's face shows through.
+function ovalMask(c) {
+  const x = c.getContext('2d');
+  x.globalCompositeOperation = 'destination-in';
+  x.beginPath();
+  x.ellipse(c.width / 2, c.height / 2, c.width / 2, c.height / 2, 0, 0, Math.PI * 2);
+  x.fill();
+  x.globalCompositeOperation = 'source-over';
+  return c;
+}
+
+// No face found: take the middle of the photo, where a selfie's face usually is.
+function middleFace(src) {
+  const c = document.createElement('canvas');
+  c.width = FACE_W; c.height = FACE_H;
+  const w = src.width * 0.5, h = Math.min(src.height * 0.6, w * FACE_H / FACE_W);
+  c.getContext('2d').drawImage(src, (src.width - w) / 2, (src.height - h) / 2, w, h, 0, 0, FACE_W, FACE_H);
+  return ovalMask(cartoonize(c));
+}
+
+function useFace(c) {
+  state.face = c;
+  state.faceURL = c.toDataURL('image/png');
+  $('#facePreview').src = state.faceURL;
+  $('#facePreview').hidden = false;
+}
+
 function setFace(file) {
   if (!file) return;
+  const status = $('#faceStatus');
   const img = new Image();
-  img.onload = () => {
-    const s = Math.min(img.width, img.height);
-    const c = document.createElement('canvas');
-    c.width = c.height = 256;
-    c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
-    state.face = cartoonize(c);
-    state.faceURL = c.toDataURL('image/jpeg', 0.85);
-    $('#facePreview').src = state.faceURL;
-    $('#facePreview').hidden = false;
+  img.onload = async () => {
     URL.revokeObjectURL(img.src);
+    const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+    const src = document.createElement('canvas');
+    src.width = Math.round(img.width * k); src.height = Math.round(img.height * k);
+    src.getContext('2d').drawImage(img, 0, 0, src.width, src.height);
+    useFace(middleFace(src));
+    status.textContent = 'Finding your face...';
+    try {
+      const res = (await loadLandmarker()).detect(src);
+      const lm = res.faceLandmarks && res.faceLandmarks[0];
+      if (!lm) { status.textContent = 'No face found, so the middle of the photo is used. Try facing the camera.'; return; }
+      useFace(cutFace(src, lm.map((p) => [p.x * src.width, p.y * src.height])));
+      status.textContent = '';
+    } catch (e) {
+      status.textContent = 'Face finder did not load, so the middle of the photo is used.';
+    }
   };
   img.src = URL.createObjectURL(file);
 }
@@ -632,7 +721,11 @@ function wire() {
   $('#startGo').addEventListener('click', begin);
   $('#endAgain').addEventListener('click', begin);
   $('#cardGo').addEventListener('click', retryAfterCard);
-  ['#facePick', '#faceSnap'].forEach((id) => $(id).addEventListener('change', (e) => setFace(e.target.files[0])));
+  ['#facePick', '#faceSnap'].forEach((id) => {
+    $(id).addEventListener('change', (e) => setFace(e.target.files[0]));
+    // Start fetching the face finder while the camera or picker is open.
+    $(id).parentElement.addEventListener('pointerdown', () => loadLandmarker().catch(() => {}), { once: true });
+  });
   const openGallery = () => { buildGallery(); $('#gallery').hidden = false; $('#galleryClose').focus({ preventScroll: true }); };
   $('#openGallery').addEventListener('click', openGallery);
   $('#openGallery2').addEventListener('click', openGallery);
