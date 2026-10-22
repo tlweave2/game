@@ -39,7 +39,7 @@ In the Lobby the correct answer is to do nothing or press STOP. Jump and Left ea
 - `death`: plays `clip`, then shows an incident report built from `card`, then returns to the retry scene. `flip: true` mirrors the clip, so one left-lunge clip serves both directions. `faceOverlay` gives the time window and a rectangle (fractions of the frame) where the player's badge photo is drawn over the reaction shot.
 - `end`: shows the personnel file and a closing line.
 
-Captions are `{ "at": seconds, "who": "Cheryl", "text": "..." }`. Add `"onlyFirst": true` for a line that plays only on the first respawn, and `"audio": "file.mp3"` to play a recording from `audio/` (it falls back to browser speech if the file is missing and the placeholder voice is on).
+Captions are `{ "at": seconds, "who": "Cheryl", "text": "..." }`. Add `"onlyFirst": true` for a line that plays only on the first respawn, and `"audio": "file.mp3"` to play a recording from `audio/` (it falls back to browser speech if the file is missing and the placeholder voice is on). Recorded lines never overlap: one that comes up while another is playing waits its turn, and cutscene and success scenes hold their last frame until Cheryl finishes. The recordings and their script are listed by number in `audio/` (`cheryl_04` and `cheryl_05` are recorded for the security-scan Lobby and not used yet).
 
 ## Swapping in real clips
 
