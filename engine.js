@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=11';
+import * as music from './music.js?v=12';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -381,7 +381,7 @@ function facePose(f, t) {
 
 // How much bigger than the tracked size to draw the player's face, so it
 // covers the hero's cartoon face. Tune here.
-const FACE_SCALE = 1.2;
+const FACE_SCALE = 1.1;
 
 function drawFace(sc, t) {
   const f = sc.faceOverlay;
@@ -545,8 +545,9 @@ function inkFace(c, P) {
   let img;
   try { img = x.getImageData(0, 0, n, m); } catch (e) { return cartoonize(c); }
   const d = img.data;
-  boxBlur(d, n, m, 5);
-  boxBlur(d, n, m, 5);
+  boxBlur(d, n, m, 2);
+  const lum = new Float32Array(n * m);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) lum[j] = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
   // Skin tone from the cheeks and forehead, pulled a little toward the hero's.
   const sample = [P[50], P[280], P[151]];
   const skin = [0, 0, 0];
@@ -555,12 +556,30 @@ function inkFace(c, P) {
     for (let ch = 0; ch < 3; ch++) skin[ch] += d[o + ch] / sample.length;
   });
   const base = skin.map((v, ch) => v * 0.75 + HERO_SKIN[ch] * 0.25);
-  const shade = base.map((v, ch) => v * [0.84, 0.78, 0.74][ch]);
   const skinL = skin[0] * 0.3 + skin[1] * 0.59 + skin[2] * 0.11;
-  for (let i = 0; i < d.length; i += 4) {
-    const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
-    const col = l < skinL * 0.86 ? shade : base;
-    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2];
+  // Four cel bands (deep shadow, shadow, lit, highlight) keep the shape of
+  // the face, beard and brows; a posterized share of the real photo keeps
+  // its colours, so the player stays recognisable.
+  const BANDS = [[0.62, [0.62, 0.55, 0.52]], [0.82, [0.8, 0.74, 0.7]], [1.04, [1, 1, 1]], [Infinity, [1.07, 1.06, 1.05]]];
+  const step = 255 / 5;
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    const k = BANDS.find(([lim]) => lum[j] < skinL * lim)[1];
+    for (let ch = 0; ch < 3; ch++) {
+      const poster = Math.round(d[i + ch] / step) * step;
+      d[i + ch] = Math.min(255, base[ch] * k[ch] * 0.65 + poster * 0.35);
+    }
+  }
+  // Light ink where the photo has strong edges (glasses, beard, hairline).
+  for (let yy = 1; yy < m - 1; yy++) {
+    for (let xx = 1; xx < n - 1; xx++) {
+      const o = yy * n + xx;
+      const gx = lum[o - n + 1] + 2 * lum[o + 1] + lum[o + n + 1] - lum[o - n - 1] - 2 * lum[o - 1] - lum[o + n - 1];
+      const gy = lum[o + n - 1] + 2 * lum[o + n] + lum[o + n + 1] - lum[o - n - 1] - 2 * lum[o - n] - lum[o - n + 1];
+      if (gx * gx + gy * gy > 14000) {
+        const q = o * 4;
+        d[q] = d[q] * 0.4 + 59 * 0.6; d[q + 1] = d[q + 1] * 0.4 + 42 * 0.6; d[q + 2] = d[q + 2] * 0.4 + 32 * 0.6;
+      }
+    }
   }
   x.putImageData(img, 0, 0);
 
@@ -570,16 +589,16 @@ function inkFace(c, P) {
     if (close) x.closePath();
   };
   const dist = (a, b) => Math.hypot(P[a][0] - P[b][0], P[a][1] - P[b][1]);
-  const lw = n * 0.022;
+  const lw = n * 0.018;
   x.lineJoin = x.lineCap = 'round';
   x.strokeStyle = INK;
 
-  // Eyes: drawn bigger and rounder, like the hero's, around their centres.
+  // Eyes: drawn a little bigger and rounder, toward the hero's, around their centres.
   [['eyeL', 468], ['eyeR', 473]].forEach(([eye, iris]) => {
     const ids = [...LM[eye], iris, iris + 1, iris + 2, iris + 3, iris + 4].filter((id) => P[id]);
     const ex = LM[eye].reduce((t, id) => t + P[id][0], 0) / LM[eye].length;
     const ey = LM[eye].reduce((t, id) => t + P[id][1], 0) / LM[eye].length;
-    ids.forEach((id) => { P[id] = [ex + (P[id][0] - ex) * 1.3, ey + (P[id][1] - ey) * 1.7]; });
+    ids.forEach((id) => { P[id] = [ex + (P[id][0] - ex) * 1.12, ey + (P[id][1] - ey) * 1.3]; });
   });
   // White, a dark iris, a highlight, inked outline.
   [['eyeL', 468], ['eyeR', 473]].forEach(([eye, iris]) => {
