@@ -50,7 +50,23 @@
         "level": "Level 2",
         "action": "Form 27-B, Posthumous Awareness Training"
       },
-      "faceOverlay": { "at": 2.0, "until": 2.8, "rect": [0.455, 0.06, 0.09, 0.23] },
+      "faceOverlay": {
+        "size": [0.0578, 0.1722],
+        "fade": 0.1,
+        "track": [
+          [1.933, 0.5031, 0.1961],
+          [2.0, 0.5031, 0.1845],
+          [2.067, 0.5031, 0.178],
+          [2.133, 0.5031, 0.1771],
+          [2.2, 0.5031, 0.1803],
+          [2.267, 0.5031, 0.185],
+          [2.333, 0.5031, 0.1882],
+          [2.4, 0.5031, 0.1877],
+          [2.8, 0.5031, 0.1868],
+          [2.867, 0.5031, 0.1961],
+          [2.933, 0.5034, 0.235]
+        ]
+      },
       "captions": [
         { "at": 3.4, "who": "Cheryl", "text": "Jumping in a monitored corridor is a Level 2 safety violation.", "audio": "cheryl_07_jump_violation.mp3" }
       ]

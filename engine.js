@@ -357,32 +357,90 @@ function sizeCanvas() {
   faceCanvas.height = Math.round(r.height * d);
 }
 
+// faceOverlay is either a fixed { at, until, rect } or a tracked
+// { track: [[t, cx, cy], ...], size: [w, h], fade } in stage fractions,
+// following the hero's head frame by frame (see tools/track_face.py).
+function facePose(f, t) {
+  if (!f.track) {
+    if (t < f.at || t > f.until) return null;
+    const [x, y, w, h] = f.rect;
+    return { cx: x + w / 2, cy: y + h / 2, w, h, a: 1, wob: Math.sin(t * 60) * 0.03 };
+  }
+  const k = f.track;
+  const t0 = k[0][0], t1 = k[k.length - 1][0];
+  if (t < t0 || t > t1) return null;
+  let i = 1;
+  while (i < k.length - 1 && k[i][0] < t) i++;
+  const [ta, xa, ya] = k[i - 1], [tb, xb, yb] = k[i];
+  const u = tb > ta ? Math.min(1, Math.max(0, (t - ta) / (tb - ta))) : 0;
+  const fade = f.fade || 0;
+  const a = fade ? Math.min(1, (t - t0) / fade, (t1 - t) / fade) : 1;
+  return { cx: xa + (xb - xa) * u, cy: ya + (yb - ya) * u, w: f.size[0], h: f.size[1], a, wob: 0 };
+}
+
 function drawFace(sc, t) {
   const f = sc.faceOverlay;
   const W = faceCanvas.width, H = faceCanvas.height;
   faceCtx.clearRect(0, 0, W, H);
-  if (!f || !state.face || t < f.at || t > f.until) return;
-  let [x, y, w, h] = f.rect;
-  if (sc.flip) x = 1 - x - w;
-  const cx = (x + w / 2) * W, cy = (y + h / 2) * H;
-  const rx = (w / 2) * W, ry = (h / 2) * H;
-  const wob = Math.sin(t * 60) * 0.03;
+  if (!f || !state.face) return;
+  const p = facePose(f, t);
+  if (!p) return;
+  const cx = (sc.flip ? 1 - p.cx : p.cx) * W, cy = p.cy * H;
+  const rx = (p.w / 2) * W, ry = (p.h / 2) * H;
   faceCtx.save();
+  faceCtx.globalAlpha = p.a;
   faceCtx.translate(cx, cy);
-  faceCtx.rotate(wob);
+  faceCtx.rotate(p.wob);
   faceCtx.beginPath();
   faceCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
   faceCtx.save();
   faceCtx.clip();
-  const s = Math.max(rx * 2, ry * 2);
-  faceCtx.drawImage(state.face, -s / 2, -s / 2, s, s);
+  // Zoom past the photo's edges so the ellipse is mostly face, not background.
+  const s = Math.max(rx * 2, ry * 2) * 1.3;
+  faceCtx.drawImage(state.face, -s / 2, -s * 0.47, s, s);
   faceCtx.restore();
-  faceCtx.lineWidth = Math.max(2, W * 0.004);
-  faceCtx.strokeStyle = '#4a2c24';
+  faceCtx.lineWidth = Math.max(2, W * 0.003);
+  faceCtx.strokeStyle = '#3b2a20';
   faceCtx.beginPath();
   faceCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
   faceCtx.stroke();
   faceCtx.restore();
+}
+
+// Turn a photo into the clips' cartoon look: flat bands of shade that keep
+// the player's own colouring, a light sepia wash, and dark ink lines where
+// the shading changes sharply.
+function cartoonize(c) {
+  const x = c.getContext('2d');
+  const n = c.width, m = c.height;
+  let img;
+  try { img = x.getImageData(0, 0, n, m); } catch (e) { return c; }
+  const d = img.data;
+  const lum = new Float32Array(n * m);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) lum[j] = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+  const ink = new Uint8Array(n * m);
+  for (let yy = 1; yy < m - 1; yy++) {
+    for (let xx = 1; xx < n - 1; xx++) {
+      const o = yy * n + xx;
+      const gx = lum[o - n + 1] + 2 * lum[o + 1] + lum[o + n + 1] - lum[o - n - 1] - 2 * lum[o - 1] - lum[o + n - 1];
+      const gy = lum[o + n - 1] + 2 * lum[o + n] + lum[o + n + 1] - lum[o - n - 1] - 2 * lum[o - n] - lum[o - n + 1];
+      if (gx * gx + gy * gy > 6400) ink[o] = ink[o + 1] = ink[o + n] = ink[o + n + 1] = 1;
+    }
+  }
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    if (ink[j]) { d[i] = 59; d[i + 1] = 42; d[i + 2] = 32; continue; }
+    const l = lum[j];
+    const band = Math.min(245, Math.round(l / 60) * 60 + 25);
+    for (let ch = 0; ch < 3; ch++) {
+      const v = band + (d[i + ch] - l) * 0.85;
+      d[i + ch] = v;
+    }
+    d[i] = d[i] * 0.88 + 0.12 * 236;
+    d[i + 1] = d[i + 1] * 0.88 + 0.12 * 214;
+    d[i + 2] = d[i + 2] * 0.88 + 0.12 * 178;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
 }
 
 function setFace(file) {
@@ -395,8 +453,13 @@ function setFace(file) {
     const x = c.getContext('2d');
     try { x.filter = 'contrast(1.35) saturate(1.5) brightness(1.05)'; } catch (e) { /* unsupported */ }
     x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
-    state.face = c;
     state.faceURL = c.toDataURL('image/jpeg', 0.85);
+    const toon = document.createElement('canvas');
+    toon.width = toon.height = 256;
+    const tx = toon.getContext('2d');
+    try { tx.filter = 'blur(1.5px)'; } catch (e) { /* unsupported */ }
+    tx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
+    state.face = cartoonize(toon);
     $('#facePreview').src = state.faceURL;
     $('#facePreview').hidden = false;
     URL.revokeObjectURL(img.src);
@@ -556,7 +619,7 @@ function wire() {
   $('#startGo').addEventListener('click', begin);
   $('#endAgain').addEventListener('click', begin);
   $('#cardGo').addEventListener('click', retryAfterCard);
-  $('#facePick').addEventListener('change', (e) => setFace(e.target.files[0]));
+  ['#facePick', '#faceSnap'].forEach((id) => $(id).addEventListener('change', (e) => setFace(e.target.files[0])));
   const openGallery = () => { buildGallery(); $('#gallery').hidden = false; $('#galleryClose').focus({ preventScroll: true }); };
   $('#openGallery').addEventListener('click', openGallery);
   $('#openGallery2').addEventListener('click', openGallery);
