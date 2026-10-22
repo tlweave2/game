@@ -13,6 +13,7 @@ scenes.json, so the player's cartoon face follows him frame by frame.
 
 It matches the head template at a few scales in every frame, smooths the
 path, and keeps every 2nd frame (the engine interpolates between them).
+With --scale it also records how big the head is in each frame.
 Check the output by eye: face detectors and swap models trained on real
 photos miss cartoon faces, which is why this uses plain template matching.
 Needs opencv-python-headless and numpy.
@@ -28,6 +29,9 @@ ap.add_argument("--head", required=True)
 ap.add_argument("--frames", required=True)
 ap.add_argument("--face", required=True)
 ap.add_argument("--step", type=int, default=2)
+ap.add_argument("--smin", type=float, default=0.85)
+ap.add_argument("--smax", type=float, default=1.25)
+ap.add_argument("--scale", action="store_true", help="add a 4th column: face size relative to --face, for a hero walking toward or away from the camera")
 a = ap.parse_args()
 
 x0, y0, x1, y1 = map(int, a.head.split(","))
@@ -53,12 +57,12 @@ sx1, sy1 = min(W, x1 + pad), min(H, y1 + pad)
 path = {}
 for i in range(f0, f1 + 1):
     best = None
-    for s in np.linspace(0.85, 1.25, 17):
+    for s in np.linspace(a.smin, a.smax, 21):
         t = cv2.resize(tpl, None, fx=s, fy=s)
         r = cv2.matchTemplate(frames[i][sy0:sy1, sx0:sx1], t, cv2.TM_CCOEFF_NORMED)
         _, score, _, (mx, my) = cv2.minMaxLoc(r)
         if best is None or score > best[0]:
-            best = (score, sx0 + mx + tw * s / 2, sy0 + my + th * s / 2)
+            best = (score, sx0 + mx + tw * s / 2, sy0 + my + th * s / 2, s)
     path[i] = best
     if best[0] < 0.6:
         print(f"warning: weak match at frame {i} ({best[0]:.2f})")
@@ -71,5 +75,9 @@ def smooth(i, k):
 
 track = []
 for i in list(range(f0, f1 + 1, a.step)):
-    track.append([round(i / fps, 3), round((smooth(i, 1) + dx) / W, 4), round((smooth(i, 2) + dy) / H, 4)])
+    k = smooth(i, 3)
+    row = [round(i / fps, 3), round((smooth(i, 1) + dx * k) / W, 4), round((smooth(i, 2) + dy * k) / H, 4)]
+    if a.scale:
+        row.append(round(k, 3))
+    track.append(row)
 print(json.dumps({"size": [round(fw / W, 4), round(fh / H, 4)], "fade": 0.1, "track": track}))
