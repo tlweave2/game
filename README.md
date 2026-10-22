@@ -14,9 +14,9 @@ python3 -m http.server 8000
 
 Open http://localhost:8000/ and press Begin. Add `?debug=1` (or press the backtick key) for a scene jump list and a live timer readout.
 
-Controls: A / D or arrow keys for left and right, W or Space for jump, S for stop, M to mute the theme music. Only the moves a prompt shows are live, and a prompt offers at most three. On a phone, tap the buttons.
+Controls: W, Space or the up arrow for jump, S or the down arrow for stop, M to mute the theme music. Only the moves a prompt shows are live, and a prompt offers at most three. On a phone, tap the buttons.
 
-In the Lobby the correct answer is to do nothing or press STOP. Jump and Left each file a different incident report.
+In the Lobby the correct answer is to press STOP. Jump and doing nothing (he keeps walking into the lasers) each file a different incident report.
 
 ## How it fits together
 
