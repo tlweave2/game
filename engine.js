@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=14';
+import * as music from './music.js?v=15';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -198,7 +198,7 @@ function loop(tok) {
       say(c);
     });
     if (sc.type === 'reflex' && !state.win && t >= sc.decisionAt) openWindow(sc, tok);
-    drawFace(sc, t);
+    drawFace(sc, t, v);
     debug(t);
     state.raf = requestAnimationFrame(step);
   };
@@ -358,7 +358,7 @@ function sizeCanvas() {
 }
 
 // faceOverlay is either a fixed { at, until, rect } or a tracked
-// { track: [[t, cx, cy, scale?], ...], size: [w, h], fade } in stage fractions,
+// { track: [[t, cx, cy, scale?, tilt°?], ...], size: [w, h], fade } in stage fractions,
 // following the hero's head frame by frame (see tools/track_face.py).
 function facePose(f, t) {
   if (!f.track) {
@@ -371,33 +371,80 @@ function facePose(f, t) {
   if (t < t0 || t > t1) return null;
   let i = 1;
   while (i < k.length - 1 && k[i][0] < t) i++;
-  const [ta, xa, ya, sa = 1] = k[i - 1], [tb, xb, yb, sb = 1] = k[i];
+  const [ta, xa, ya, sa = 1, ra = 0] = k[i - 1], [tb, xb, yb, sb = 1, rb = 0] = k[i];
   const u = tb > ta ? Math.min(1, Math.max(0, (t - ta) / (tb - ta))) : 0;
   const fade = f.fade || 0;
   const a = fade ? Math.min(1, (t - t0) / fade, (t1 - t) / fade) : 1;
   const sc = sa + (sb - sa) * u;
-  return { cx: xa + (xb - xa) * u, cy: ya + (yb - ya) * u, w: f.size[0] * sc, h: f.size[1] * sc, a, wob: 0 };
+  const tilt = (ra + (rb - ra) * u) * Math.PI / 180;
+  return { cx: xa + (xb - xa) * u, cy: ya + (yb - ya) * u, w: f.size[0] * sc, h: f.size[1] * sc, a, wob: tilt };
 }
 
 // How much bigger than the tracked size to draw the player's face, so it
 // covers the hero's cartoon face. Tune here.
 const FACE_SCALE = 1.0;
 
-function drawFace(sc, t) {
+// How lit the hero's face is in this frame, as an RGB multiplier against
+// his skin in full light: the brighter half of the skin-coloured pixels
+// under the face, eased over time so it doesn't flicker.
+const lightCanvas = document.createElement('canvas');
+lightCanvas.width = 10; lightCanvas.height = 12;
+const lightCtx = lightCanvas.getContext('2d', { willReadFrequently: true });
+let light = [1, 1, 1];
+function sampleLight(v, p) {
+  try {
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw) return light;
+    const w = p.w * vw * 0.7, h = p.h * vh * 0.7;
+    lightCtx.drawImage(v, p.cx * vw - w / 2, p.cy * vh - h / 2, w, h, 0, 0, 10, 12);
+    const d = lightCtx.getImageData(0, 0, 10, 12).data;
+    const px = [];
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > d[i + 1] && d[i + 1] > d[i + 2] && d[i] > 60) px.push([d[i], d[i + 1], d[i + 2]]);
+    }
+    if (px.length < 8) return light;
+    px.sort((q, r) => (r[0] + r[1] + r[2]) - (q[0] + q[1] + q[2]));
+    const top = px.slice(0, Math.ceil(px.length / 2));
+    light = light.map((old, ch) => {
+      const mean = top.reduce((t, q) => t + q[ch], 0) / top.length;
+      const want = Math.min(1, Math.max(0.5, mean / HERO_SKIN[ch]));
+      return old + (want - old) * 0.3;
+    });
+  } catch (e) { /* tainted or not ready: keep the last value */ }
+  return light;
+}
+
+const tintCanvas = document.createElement('canvas');
+function litFace(face, k) {
+  if (k.every((v) => v > 0.98)) return face;
+  tintCanvas.width = face.width; tintCanvas.height = face.height;
+  const x = tintCanvas.getContext('2d');
+  x.drawImage(face, 0, 0);
+  x.globalCompositeOperation = 'multiply';
+  x.fillStyle = `rgb(${k.map((v) => Math.round(v * 255)).join(',')})`;
+  x.fillRect(0, 0, face.width, face.height);
+  x.globalCompositeOperation = 'destination-in';
+  x.drawImage(face, 0, 0);
+  x.globalCompositeOperation = 'source-over';
+  return tintCanvas;
+}
+
+function drawFace(sc, t, v) {
   const f = sc.faceOverlay;
   const W = faceCanvas.width, H = faceCanvas.height;
   faceCtx.clearRect(0, 0, W, H);
   if (!f || !state.face) return;
   const p = facePose(f, t);
-  if (!p) return;
+  if (!p) { light = [1, 1, 1]; return; }
+  const face = v ? litFace(state.face, sampleLight(v, p)) : state.face;
   const cx = (sc.flip ? 1 - p.cx : p.cx) * W, cy = p.cy * H;
   const rx = (p.w / 2) * W * FACE_SCALE, ry = (p.h / 2) * H * FACE_SCALE;
   faceCtx.save();
   faceCtx.globalAlpha = p.a;
   faceCtx.translate(cx, cy);
-  faceCtx.rotate(p.wob);
+  faceCtx.rotate(sc.flip ? -p.wob : p.wob);
   // state.face is already cut to the face with a soft edge, so stretch it over the ellipse.
-  faceCtx.drawImage(state.face, -rx, -ry, rx * 2, ry * 2);
+  faceCtx.drawImage(face, -rx, -ry, rx * 2, ry * 2);
   faceCtx.restore();
 }
 
@@ -682,6 +729,48 @@ function useFace(c) {
   $('#facePreview').hidden = false;
 }
 
+// In-page selfie camera with an oval to line the face up in. Falls back to
+// the phone's own camera app (the capture input) if the browser won't share
+// the camera.
+let camStream = null;
+async function openCamera() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1280 } }, audio: false,
+    });
+  } catch (e) {
+    $('#faceSnap').click();
+    return;
+  }
+  const v = $('#camVideo');
+  v.srcObject = camStream;
+  $('#selfieCam').hidden = false;
+  try { await v.play(); } catch (e) { /* autoplay attribute covers it */ }
+  $('#camSnap').focus({ preventScroll: true });
+}
+
+function closeCamera() {
+  if (camStream) camStream.getTracks().forEach((t) => t.stop());
+  camStream = null;
+  $('#camVideo').srcObject = null;
+  $('#selfieCam').hidden = true;
+}
+
+function snapCamera() {
+  const v = $('#camVideo');
+  if (!v.videoWidth) return;
+  // Grab what the 3:4 frame shows, mirrored like the preview.
+  const fw = Math.min(v.videoWidth, v.videoHeight * 0.75), fh = fw / 0.75;
+  const c = document.createElement('canvas');
+  c.width = Math.round(fw); c.height = Math.round(fh);
+  const x = c.getContext('2d');
+  x.translate(c.width, 0);
+  x.scale(-1, 1);
+  x.drawImage(v, (v.videoWidth - fw) / 2, (v.videoHeight - fh) / 2, fw, fh, 0, 0, c.width, c.height);
+  closeCamera();
+  c.toBlob((b) => setFace(b), 'image/jpeg', 0.92);
+}
+
 // Hold "Begin" while the photo is processed, so the finished face is on the
 // hero from the first frame instead of popping in partway through.
 let faceBusy = false;
@@ -879,11 +968,15 @@ function wire() {
   $('#startGo').addEventListener('click', begin);
   $('#endAgain').addEventListener('click', begin);
   $('#cardGo').addEventListener('click', retryAfterCard);
-  ['#facePick', '#faceSnap'].forEach((id) => {
-    $(id).addEventListener('change', (e) => setFace(e.target.files[0]));
-    // Start fetching the face finder while the camera or picker is open.
-    $(id).parentElement.addEventListener('pointerdown', () => loadLandmarker().catch(() => {}), { once: true });
+  ['#facePick', '#faceSnap'].forEach((id) => $(id).addEventListener('change', (e) => setFace(e.target.files[0])));
+  // Start fetching the face finder while the camera or picker is open.
+  ['#takeSelfie', '#facePick'].forEach((id) => {
+    const el = id === '#facePick' ? $(id).parentElement : $(id);
+    el.addEventListener('pointerdown', () => loadLandmarker().catch(() => {}), { once: true });
   });
+  $('#takeSelfie').addEventListener('click', openCamera);
+  $('#camSnap').addEventListener('click', snapCamera);
+  $('#camCancel').addEventListener('click', closeCamera);
   const openGallery = () => { buildGallery(); $('#gallery').hidden = false; $('#galleryClose').focus({ preventScroll: true }); };
   $('#openGallery').addEventListener('click', openGallery);
   $('#openGallery2').addEventListener('click', openGallery);
@@ -902,6 +995,7 @@ function wire() {
   new ResizeObserver(sizeCanvas).observe(stage);
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Backquote') { $('#debug').hidden = !$('#debug').hidden; return; }
+    if (!$('#selfieCam').hidden) { if (e.code === 'Escape') closeCamera(); return; }
     if (!$('#gallery').hidden) { if (e.code === 'Escape') $('#gallery').hidden = true; return; }
     if (!$('#start').hidden) return;
     if (e.code === 'Escape') { e.preventDefault(); quit(); return; }

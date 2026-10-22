@@ -70,6 +70,7 @@ button { font: inherit; color: inherit; }
 /* ---- overlays ---- */
 .overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: rgba(18, 14, 11, 0.84); }
 #gallery { z-index: 30; }
+#selfieCam { z-index: 35; background: #120e0b; }
 .panel { width: min(100%, 560px); display: grid; gap: 14px; }
 h1, h2 { margin: 0; font-family: var(--display); font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; text-wrap: balance; }
 h1 { font-size: clamp(34px, 9vw, 76px); line-height: 0.95; }
@@ -85,6 +86,13 @@ label.opt { display: flex; gap: 8px; align-items: center; }
 .filebtn { position: relative; cursor: pointer; }
 .filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .filebtn:focus-within { outline: 2px solid var(--tan); outline-offset: 2px; }
+.cam { width: min(100%, 420px); display: grid; gap: 12px; }
+.camtitle { margin: 0; font: 900 18px/1 var(--display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--beige); }
+.camframe { position: relative; aspect-ratio: 3 / 4; overflow: hidden; background: #000; border: 1px solid var(--tan); }
+#camVideo { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.camguide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.camguide path { fill: rgba(18, 14, 11, 0.55); }
+.camguide ellipse { fill: none; stroke: var(--beige); stroke-width: 0.8; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
 #facePreview { width: 48px; height: 48px; object-fit: contain; border-radius: 50%; border: 2px solid var(--tan); background: #c9bda6; }
 .small { margin: 0; font-size: 12px; color: var(--muted); }
 #bootError { margin: 0; color: #ff9d94; }
@@ -157,12 +165,13 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
       <fieldset>
         <legend>Badge photo (optional)</legend>
         <div class="row">
-          <label class="btn ghost filebtn">Take selfie<input type="file" id="faceSnap" accept="image/*" capture="user"></label>
+          <button class="btn ghost" id="takeSelfie" type="button">Take selfie</button>
+          <input type="file" id="faceSnap" accept="image/*" capture="user" hidden>
           <label class="btn ghost filebtn">Choose photo<input type="file" id="facePick" accept="image/*"></label>
           <img id="facePreview" alt="Your badge photo preview" hidden>
         </div>
         <p class="small" id="faceStatus" aria-live="polite"></p>
-        <p class="small">Face the camera in good light. Your photo stays on this device and is only drawn onto your incident reports and, onto the hero, cartoon-style.</p>
+        <p class="small">Face the camera in good light. Your photo stays on this device. It is drawn cartoon-style onto the hero and your incident reports.</p>
       </fieldset>
       <div class="row">
         <button class="btn" id="startGo" type="button" disabled>Begin orientation</button>
@@ -170,6 +179,24 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
       </div>
       <p class="small">Keys: A / D or arrow keys for left and right, W or Space for jump, S for stop, Esc to quit to this screen. On a phone, tap the buttons. Press the backtick key for the debug panel.</p>
       <p id="bootError" hidden></p>
+    </div>
+  </section>
+
+  <section id="selfieCam" class="overlay" hidden aria-labelledby="camTitle">
+    <div class="cam">
+      <h2 id="camTitle" class="camtitle">Badge photo</h2>
+      <div class="camframe">
+        <video id="camVideo" playsinline muted autoplay></video>
+        <svg class="camguide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 0H100V100H0Z M50 14 A24 32 0 1 0 50.01 14Z" fill-rule="evenodd" />
+          <ellipse cx="50" cy="46" rx="24" ry="32" />
+        </svg>
+      </div>
+      <p class="small">Fit your face inside the oval. Look straight at the camera with your eyes open, in good light, no hat or sunglasses.</p>
+      <div class="row">
+        <button class="btn" id="camSnap" type="button">Snap</button>
+        <button class="btn ghost" id="camCancel" type="button">Cancel</button>
+      </div>
     </div>
   </section>
 
@@ -229,4 +256,4 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
 
 <!-- Bump ?v= on every change to engine.js or music.js. GitHub Pages lets browsers cache
      files for 10 minutes, and a fresh page with a stale script leaves new buttons dead. -->
-<script type="module" src="engine.js?v=14"></script>
+<script type="module" src="engine.js?v=15"></script>
