@@ -90,11 +90,11 @@
 
     "lobby_success": {
       "type": "success",
-      "clip": "lobby_success.mp4",
+      "clip": "lobby_success_lasers_off.mp4",
       "stamp": { "id": "visitor_log", "label": "Visitor Log (signed)" },
       "next": "lobby_end",
       "captions": [
-        { "at": 0.9, "who": "Cheryl", "text": "Wonderful stillness. Your productivity has not been affected.", "audio": "cheryl_06_stillness.mp3" }
+        { "at": 4.4, "who": "Cheryl", "text": "Wonderful stillness. Your productivity has not been affected.", "audio": "cheryl_06_stillness.mp3" }
       ]
     },
 
