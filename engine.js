@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=13';
+import * as music from './music.js?v=14';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -381,7 +381,7 @@ function facePose(f, t) {
 
 // How much bigger than the tracked size to draw the player's face, so it
 // covers the hero's cartoon face. Tune here.
-const FACE_SCALE = 0.9;
+const FACE_SCALE = 1.0;
 
 function drawFace(sc, t) {
   const f = sc.faceOverlay;
@@ -396,18 +396,8 @@ function drawFace(sc, t) {
   faceCtx.globalAlpha = p.a;
   faceCtx.translate(cx, cy);
   faceCtx.rotate(p.wob);
-  faceCtx.beginPath();
-  faceCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-  faceCtx.save();
-  faceCtx.clip();
-  // state.face is already cut to the face, so stretch it over the ellipse.
+  // state.face is already cut to the face with a soft edge, so stretch it over the ellipse.
   faceCtx.drawImage(state.face, -rx, -ry, rx * 2, ry * 2);
-  faceCtx.restore();
-  faceCtx.lineWidth = Math.max(2, W * 0.003);
-  faceCtx.strokeStyle = '#3b2a20';
-  faceCtx.beginPath();
-  faceCtx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-  faceCtx.stroke();
   faceCtx.restore();
 }
 
@@ -657,16 +647,22 @@ function inkFace(c, P) {
   return c;
 }
 
-// Keep only the ellipse that fills the canvas. For a face looking at the
-// camera this matches its outline; a turned face keeps a sliver of
-// background rather than leaving holes where the hero's face shows through.
+// Keep only the ellipse that fills the canvas, fading to transparent over
+// its outer edge so it blends into the hero's head with no hard ring. For a
+// face looking at the camera this matches its outline; a turned face keeps a
+// sliver of background rather than leaving holes.
 function ovalMask(c) {
   const x = c.getContext('2d');
+  const g = x.createRadialGradient(0, 0, 0, 0, 0, 1);
+  g.addColorStop(0.82, 'rgba(0,0,0,1)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.save();
   x.globalCompositeOperation = 'destination-in';
-  x.beginPath();
-  x.ellipse(c.width / 2, c.height / 2, c.width / 2, c.height / 2, 0, 0, Math.PI * 2);
-  x.fill();
-  x.globalCompositeOperation = 'source-over';
+  x.translate(c.width / 2, c.height / 2);
+  x.scale(c.width / 2, c.height / 2);
+  x.fillStyle = g;
+  x.fillRect(-1, -1, 2, 2);
+  x.restore();
   return c;
 }
 
