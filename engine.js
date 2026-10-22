@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=12';
+import * as music from './music.js?v=13';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -381,7 +381,7 @@ function facePose(f, t) {
 
 // How much bigger than the tracked size to draw the player's face, so it
 // covers the hero's cartoon face. Tune here.
-const FACE_SCALE = 1.1;
+const FACE_SCALE = 0.9;
 
 function drawFace(sc, t) {
   const f = sc.faceOverlay;
@@ -686,26 +686,46 @@ function useFace(c) {
   $('#facePreview').hidden = false;
 }
 
+// Hold "Begin" while the photo is processed, so the finished face is on the
+// hero from the first frame instead of popping in partway through.
+let faceBusy = false;
 function setFace(file) {
   if (!file) return;
+  faceBusy = true;
   const status = $('#faceStatus');
+  const go = $('#startGo');
+  const label = go.textContent;
+  go.disabled = true;
+  go.textContent = 'Processing photo...';
+  status.textContent = 'Finding your face (the first photo takes a few seconds)...';
+  const done = (msg) => {
+    faceBusy = false;
+    status.textContent = msg;
+    go.textContent = label;
+    go.disabled = false;
+  };
   const img = new Image();
+  img.onerror = () => done('That photo could not be opened. Try another.');
   img.onload = async () => {
     URL.revokeObjectURL(img.src);
     const k = Math.min(1, 1024 / Math.max(img.width, img.height));
     const src = document.createElement('canvas');
     src.width = Math.round(img.width * k); src.height = Math.round(img.height * k);
     src.getContext('2d').drawImage(img, 0, 0, src.width, src.height);
-    useFace(middleFace(src));
-    status.textContent = 'Finding your face...';
     try {
-      const res = (await loadLandmarker()).detect(src);
+      const slow = new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 20000));
+      const res = (await Promise.race([loadLandmarker(), slow])).detect(src);
       const lm = res.faceLandmarks && res.faceLandmarks[0];
-      if (!lm) { status.textContent = 'No face found, so the middle of the photo is used. Try facing the camera.'; return; }
+      if (!lm) {
+        useFace(middleFace(src));
+        done('No face found, so the middle of the photo is used. Try facing the camera.');
+        return;
+      }
       useFace(cutFace(src, lm.map((p) => [p.x * src.width, p.y * src.height])));
-      status.textContent = '';
+      done('Badge photo ready.');
     } catch (e) {
-      status.textContent = 'Face finder did not load, so the middle of the photo is used.';
+      useFace(middleFace(src));
+      done('Face finder did not load, so the middle of the photo is used.');
     }
   };
   img.src = URL.createObjectURL(file);
@@ -909,7 +929,7 @@ async function boot() {
   sizeCanvas();
   hud();
   if (new URLSearchParams(location.search).has('debug')) $('#debug').hidden = false;
-  $('#startGo').disabled = false;
+  if (!faceBusy) $('#startGo').disabled = false;
   // warm the first clips while the player reads the title screen
   const first = scenes[data.start];
   if (first) { getClip(first.clip); targetsOf(first).forEach((t) => t.clip && getClip(t.clip)); }
