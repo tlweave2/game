@@ -1,7 +1,7 @@
 // Orientation Day player. No build step; the face finder (MediaPipe) loads from a CDN on demand.
 // Scene graph lives in scenes.json; this file only knows how to play it.
 
-import * as music from './music.js?v=10';
+import * as music from './music.js?v=11';
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage');
@@ -516,7 +516,126 @@ function cutFace(src, pts) {
   x.translate(-mx, -my);
   x.drawImage(src, 0, 0);
   x.setTransform(1, 0, 0, 1, 0, 0);
-  return ovalMask(cartoonize(c));
+  const T = ([px, py]) => [
+    ((px - mx) * cos - (py - my) * sin - x0) * sx,
+    ((px - mx) * sin + (py - my) * cos - y0) * sy,
+  ];
+  return ovalMask(inkFace(c, pts.map(T)));
+}
+
+// Feature outlines from the landmarks, in order around each shape.
+const LM = {
+  browL: [70, 63, 105, 66, 107], browR: [300, 293, 334, 296, 336],
+  eyeL: [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
+  eyeR: [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249],
+  lipsOut: [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146],
+  lipsIn: [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95],
+  noseSide: [193, 245, 188, 174, 236, 198, 209], noseBase: [98, 97, 2, 326, 327],
+};
+const INK = '#3b2a20';
+const HERO_SKIN = [222, 189, 157];
+
+// Redraw the face in the clips' style: the player's own skin tone in two
+// flat shades (lit and shadow, like the hero's cel shading), then clean,
+// even dark-brown lines for brows, eyes, nose and mouth traced from the
+// face landmarks, instead of edges guessed from the photo.
+function inkFace(c, P) {
+  const x = c.getContext('2d');
+  const n = c.width, m = c.height;
+  let img;
+  try { img = x.getImageData(0, 0, n, m); } catch (e) { return cartoonize(c); }
+  const d = img.data;
+  boxBlur(d, n, m, 5);
+  boxBlur(d, n, m, 5);
+  // Skin tone from the cheeks and forehead, pulled a little toward the hero's.
+  const sample = [P[50], P[280], P[151]];
+  const skin = [0, 0, 0];
+  sample.forEach(([px, py]) => {
+    const o = (Math.round(Math.min(m - 1, Math.max(0, py))) * n + Math.round(Math.min(n - 1, Math.max(0, px)))) * 4;
+    for (let ch = 0; ch < 3; ch++) skin[ch] += d[o + ch] / sample.length;
+  });
+  const base = skin.map((v, ch) => v * 0.75 + HERO_SKIN[ch] * 0.25);
+  const shade = base.map((v, ch) => v * [0.84, 0.78, 0.74][ch]);
+  const skinL = skin[0] * 0.3 + skin[1] * 0.59 + skin[2] * 0.11;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+    const col = l < skinL * 0.86 ? shade : base;
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2];
+  }
+  x.putImageData(img, 0, 0);
+
+  const path = (ids, close) => {
+    x.beginPath();
+    ids.forEach((id, i) => x[i ? 'lineTo' : 'moveTo'](P[id][0], P[id][1]));
+    if (close) x.closePath();
+  };
+  const dist = (a, b) => Math.hypot(P[a][0] - P[b][0], P[a][1] - P[b][1]);
+  const lw = n * 0.022;
+  x.lineJoin = x.lineCap = 'round';
+  x.strokeStyle = INK;
+
+  // Eyes: drawn bigger and rounder, like the hero's, around their centres.
+  [['eyeL', 468], ['eyeR', 473]].forEach(([eye, iris]) => {
+    const ids = [...LM[eye], iris, iris + 1, iris + 2, iris + 3, iris + 4].filter((id) => P[id]);
+    const ex = LM[eye].reduce((t, id) => t + P[id][0], 0) / LM[eye].length;
+    const ey = LM[eye].reduce((t, id) => t + P[id][1], 0) / LM[eye].length;
+    ids.forEach((id) => { P[id] = [ex + (P[id][0] - ex) * 1.3, ey + (P[id][1] - ey) * 1.7]; });
+  });
+  // White, a dark iris, a highlight, inked outline.
+  [['eyeL', 468], ['eyeR', 473]].forEach(([eye, iris]) => {
+    path(LM[eye], true);
+    x.fillStyle = '#f7f1e3';
+    x.fill();
+    x.save();
+    x.clip();
+    const r = P[iris + 1] ? Math.max(dist(iris, iris + 1), dist(iris, iris + 3)) : dist(LM[eye][0], LM[eye][8]) * 0.22;
+    x.fillStyle = INK;
+    x.beginPath();
+    x.arc(P[iris][0], P[iris][1], r * 0.8, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#ffffff';
+    x.beginPath();
+    x.arc(P[iris][0] + r * 0.25, P[iris][1] - r * 0.25, r * 0.22, 0, Math.PI * 2);
+    x.fill();
+    x.restore();
+    path(LM[eye], true);
+    x.lineWidth = lw;
+    x.stroke();
+  });
+
+  // Brows: thick strokes, like the hero's.
+  ['browL', 'browR'].forEach((b) => {
+    path(LM[b]);
+    x.lineWidth = lw * 2.2;
+    x.stroke();
+  });
+
+  // Nose: one side line and the base.
+  path(LM.noseSide);
+  x.lineWidth = lw * 0.9;
+  x.stroke();
+  path(LM.noseBase);
+  x.stroke();
+
+  // Mouth: dark inside when open, then the lips' parting line.
+  if (dist(13, 14) > dist(61, 291) * 0.08) {
+    path(LM.lipsIn, true);
+    x.fillStyle = '#5a2a22';
+    x.fill();
+    x.lineWidth = lw;
+    x.stroke();
+  } else {
+    path(LM.lipsIn.slice(0, 11));
+    x.lineWidth = lw * 1.1;
+    x.stroke();
+  }
+  // Lower lip hint.
+  path(LM.lipsOut.slice(12, 18));
+  x.lineWidth = lw * 0.6;
+  x.globalAlpha = 0.6;
+  x.stroke();
+  x.globalAlpha = 1;
+  return c;
 }
 
 // Keep only the ellipse that fills the canvas. For a face looking at the
