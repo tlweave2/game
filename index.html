@@ -82,6 +82,9 @@ h2 { font-size: clamp(22px, 5vw, 34px); line-height: 1; }
 fieldset { margin: 0; padding: 12px 14px; border: 1px dashed var(--tan); display: grid; gap: 8px; }
 legend { padding: 0 6px; font: 500 11px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--tan); }
 label.opt { display: flex; gap: 8px; align-items: center; }
+.filebtn { position: relative; cursor: pointer; }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.filebtn:focus-within { outline: 2px solid var(--tan); outline-offset: 2px; }
 #facePreview { width: 40px; height: 40px; object-fit: cover; border-radius: 50%; border: 2px solid var(--tan); }
 .small { margin: 0; font-size: 12px; color: var(--muted); }
 #bootError { margin: 0; color: #ff9d94; }
@@ -154,10 +157,11 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
       <fieldset>
         <legend>Badge photo (optional)</legend>
         <div class="row">
-          <input type="file" id="facePick" accept="image/*">
+          <label class="btn ghost filebtn">Take selfie<input type="file" id="faceSnap" accept="image/*" capture="user"></label>
+          <label class="btn ghost filebtn">Choose photo<input type="file" id="facePick" accept="image/*"></label>
           <img id="facePreview" alt="Your badge photo preview" hidden>
         </div>
-        <p class="small">Stays on this device. It is only drawn onto your incident reports and the reaction shots.</p>
+        <p class="small">Face the camera in good light. Your photo stays on this device and is only drawn onto your incident reports and, cartoon-style, onto the hero.</p>
       </fieldset>
       <div class="row">
         <button class="btn" id="startGo" type="button" disabled>Begin orientation</button>
@@ -224,4 +228,4 @@ ul.plain li { padding: 8px 10px; background: var(--ink-2); border-left: 3px soli
 
 <!-- Bump ?v= on every change to engine.js or music.js. GitHub Pages lets browsers cache
      files for 10 minutes, and a fresh page with a stale script leaves new buttons dead. -->
-<script type="module" src="engine.js?v=6"></script>
+<script type="module" src="engine.js?v=7"></script>
